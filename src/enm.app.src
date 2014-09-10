@@ -1,0 +1,13 @@
+{application, enm,
+ [
+  {description, "nanomsg Erlang driver"},
+  {vsn, "0.1"},
+  {registered, [enm]},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, {enm_app,[]}},
+  {env, [
+        ]}
+ ]}.
