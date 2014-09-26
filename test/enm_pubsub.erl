@@ -32,7 +32,8 @@ pubsub_test_() ->
      fun enm:start_link/0,
      fun(_) -> enm:stop() end,
      [fun one_pub/0,
-      fun two_pub/0]}.
+      fun two_pub/0,
+      fun check_sub_filter/0]}.
 
 one_pub() ->
     {ok, Pub1} = enm:pub(),
@@ -125,6 +126,29 @@ two_pub_passive(Pub1, Pub2, Sub1) ->
     ok = enm:send(Pub2, Data),
     {ok, Data} = enm:recv(Sub1),
     {ok, Data} = enm:recv(Sub1),
+    ok.
+
+check_sub_filter() ->
+    {ok, Pub} = enm:pub([{bind, ?URL}]),
+    {ok, Sub} = enm:sub([{connect, ?URL}, {subscribe, "good"}]),
+    ok = enm:send(Pub, "bad"),
+    ok = receive
+             Bad -> error({should_be_filtered, Bad})
+         after
+             2000 ->
+                 ok
+         end,
+    Good = <<"good">>,
+    ok = enm:send(Pub, Good),
+    ok = receive
+             {nnsub,Sub,Good} -> ok;
+             Msg -> error({unexpected_data, Msg})
+         after
+             2000 ->
+                 error(subscriber_timeout)
+         end,
+    ok = enm:close(Sub),
+    ok = enm:close(Pub),
     ok.
 
 do_sub(Subs, Data) ->

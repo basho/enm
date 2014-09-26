@@ -625,6 +625,8 @@ enm_ready_input(ErlDrvData drv_data, ErlDrvEvent event)
     rc = nn_recv(d->fd, &buf, NN_MSG, NN_DONTWAIT);
     if (rc < 0) {
         err = errno;
+        if (err == EAGAIN)
+            return;
         strcpy(pktname, enm_protocol_name(d->protocol));
         if (d->protocol == NN_SURVEYOR && err == EFSM) {
             /*
