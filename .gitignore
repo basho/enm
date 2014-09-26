@@ -9,7 +9,8 @@ ebin
 c_src/bin/*
 c_src/include/*
 c_src/lib/*
-c_src/nanomsg-0.4-beta/*
+c_src/nanomsg-*/*
+c_src/*.d
 /.eqc-info
 /current_counterexample.eqc
 .local_dialyzer_plt
