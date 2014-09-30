@@ -146,26 +146,30 @@ close(Sock) when is_port(Sock) ->
 
 -spec shutdown(nnsocket(), nnid()) -> ok | {error, any()}.
 shutdown(Sock, Id) when is_port(Sock) ->
-    binary_to_term(port_control(Sock, ?ENM_SHUTDOWN, <<Id:32/big>>)).
+    call_control(Sock, ?ENM_SHUTDOWN, <<Id:32/big>>).
 
 -spec connect(nnsocket(), nnurl()) -> {ok, nnid()} | {error, any()}.
 connect(Sock, Url) when is_port(Sock) ->
-    binary_to_term(port_control(Sock, ?ENM_CONNECT, url(Url))).
+    call_control(Sock, ?ENM_CONNECT, url(Url)).
 
 -spec bind(nnsocket(), nnurl()) -> {ok, nnid()} | {error, any()}.
 bind(Sock, Url) when is_port(Sock) ->
-    binary_to_term(port_control(Sock, ?ENM_BIND, url(Url))).
+    call_control(Sock, ?ENM_BIND, url(Url)).
 
 -spec getopts(nnsocket(), nnoptnames()) -> {ok, nngetopts()} | {error, any()}.
 getopts(Sock, OptNames) when is_port(Sock) ->
     OptBin = validate_opt_names(OptNames),
-    binary_to_term(port_control(Sock, ?ENM_GETOPTS, OptBin)).
+    call_control(Sock, ?ENM_GETOPTS, OptBin).
 
 -spec setopts(nnsocket(), nnsetopts()) -> ok | {error, any()}.
 setopts(Sock, Opts) when is_port(Sock) ->
-    {ok, [{type,Type}]} = getopts(Sock, [type]),
-    OptBin = validate_opts(normalize_opts(Opts), Type),
-    binary_to_term(port_control(Sock, ?ENM_SETOPTS, OptBin)).
+    case getopts(Sock, [type]) of
+        {ok, [{type,Type}]} ->
+            OptBin = validate_opts(normalize_opts(Opts), Type),
+            call_control(Sock, ?ENM_SETOPTS, OptBin);
+        Error ->
+            Error
+    end.
 
 -spec controlling_process(nnsocket(), pid()) -> ok | {error, any()}.
 controlling_process(Sock, NewOwner) when is_port(Sock) ->
@@ -175,7 +179,7 @@ controlling_process(Sock, NewOwner) when is_port(Sock) ->
         {connected, Owner} when Owner /= self() ->
             {error, not_owner};
         undefined ->
-            {error, einval};
+            {error, closed};
         _ ->
             {ok, Opts} = getopts(Sock, [active,type]),
             {active,A} = lists:keyfind(active,1,Opts),
@@ -271,8 +275,13 @@ respondent(Opts) ->
 
 -spec send(nnsocket(), iodata()) -> ok | {error, any()}.
 send(Sock, Data) when is_port(Sock) ->
-    true = port_command(Sock, Data),
-    ok.
+    try
+        true = port_command(Sock, Data),
+        ok
+    catch
+        error:badarg ->
+            {error, closed}
+    end.
 
 -spec recv(nnsocket()) -> {ok, nndata()} | {error, any()}.
 -spec recv(nnsocket(), timeout()) -> {ok, nndata()} | {error, any()}.
@@ -281,7 +290,7 @@ recv(Sock) when is_port(Sock) ->
 recv(Sock, Timeout) when is_port(Sock) ->
     Ref = make_ref(),
     Bin = term_to_binary(Ref),
-    case binary_to_term(port_control(Sock, ?ENM_RECV, Bin)) of
+    try binary_to_term(port_control(Sock, ?ENM_RECV, Bin)) of
         {Ref, wait} ->
             receive
                 {Ref, Reply} when is_tuple(Reply) ->
@@ -305,6 +314,9 @@ recv(Sock, Timeout) when is_port(Sock) ->
             Reply;
         {Ref, Reply} ->
             {ok, Reply}
+    catch
+        error:badarg ->
+            {error, closed}
     end.
 
 -define(SHLIB, "enm_drv").
@@ -404,6 +416,15 @@ socket(Type, [], [{connect,Url}|_], Opts) ->
     end;
 socket(Type, _, _, Opts) ->
     error(badarg, [Type, Opts]).
+
+-spec call_control(nnsocket(), non_neg_integer(), binary()) -> {error, closed} | term().
+call_control(Sock, Cmd, Bin) ->
+    try
+        binary_to_term(port_control(Sock, Cmd, Bin))
+    catch
+        error:badarg ->
+            {error, closed}
+    end.
 
 -spec open_socket(nntypename(), nnopenopts()) -> {ok, nnsocket()} | {error, any()}.
 open_socket(Type, Opts) ->
@@ -654,16 +675,74 @@ url_test() ->
          end,
     ok.
 
-close_test() ->
-    start(),
-    try
-        {ok,Sock} = enm:pair(),
-        %% verify multiple calls to close just return ok
-        ok = enm:close(Sock),
-        ok = enm:close(Sock),
-        ok
-    after
-        stop()
-    end.
+close_test_() ->
+    {setup,
+     fun start_link/0,
+     fun(_) -> stop() end,
+     [fun close_twice/0,
+      fun close_send/0,
+      fun close_recv/0,
+      fun close_bind/0,
+      fun close_connect/0,
+      fun close_shutdown/0,
+      fun close_getopts/0,
+      fun close_setopts/0,
+      fun close_ctrlproc/0]}.
+
+close_twice() ->
+    {ok,Sock} = enm:pair(),
+    %% verify multiple calls to close just return ok
+    ok = enm:close(Sock),
+    ok = enm:close(Sock),
+    ok.
+
+close_send() ->
+    {ok,Sock} = enm:pair(),
+    ok = enm:close(Sock),
+    {error, closed} = enm:send(Sock, "foo"),
+    ok.
+
+close_recv() ->
+    {ok,Sock} = enm:pair(),
+    ok = enm:close(Sock),
+    {error, closed} = enm:recv(Sock),
+    ok.
+
+close_bind() ->
+    {ok,Sock} = enm:pair(),
+    ok = enm:close(Sock),
+    {error, closed} = enm:bind(Sock, "inproc://foo"),
+    ok.
+
+close_connect() ->
+    {ok,Sock} = enm:pair(),
+    ok = enm:close(Sock),
+    {error, closed} = enm:connect(Sock, "inproc://foo"),
+    ok.
+
+close_shutdown() ->
+    {ok,Sock} = enm:pair(),
+    {ok,Id} = enm:bind(Sock, "inproc://foo"),
+    ok = enm:close(Sock),
+    {error, closed} = enm:shutdown(Sock, Id),
+    ok.
+
+close_getopts() ->
+    {ok,Sock} = enm:pair(),
+    ok = enm:close(Sock),
+    {error, closed} = enm:getopts(Sock, [active]),
+    ok.
+
+close_setopts() ->
+    {ok,Sock} = enm:pair(),
+    ok = enm:close(Sock),
+    {error, closed} = enm:setopts(Sock, [{active,false}]),
+    ok.
+
+close_ctrlproc() ->
+    {ok,Sock} = enm:pair(),
+    ok = enm:close(Sock),
+    {error, closed} = enm:controlling_process(Sock, self()),
+    ok.
 
 -endif.
