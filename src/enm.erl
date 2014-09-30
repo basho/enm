@@ -136,9 +136,11 @@ stop() ->
 -spec close(nnsocket()) -> ok.
 close(Sock) when is_port(Sock) ->
     try
-        binary_to_term(port_control(Sock, ?ENM_CLOSE, <<>>))
-    after
-        true = erlang:port_close(Sock)
+        _ = port_control(Sock, ?ENM_CLOSE, <<>>),
+        _ = erlang:port_close(Sock)
+    catch
+        error:badarg ->
+            ok
     end,
     ok.
 
@@ -651,5 +653,17 @@ url_test() ->
              error:badarg -> ok
          end,
     ok.
+
+close_test() ->
+    start(),
+    try
+        {ok,Sock} = enm:pair(),
+        %% verify multiple calls to close just return ok
+        ok = enm:close(Sock),
+        ok = enm:close(Sock),
+        ok
+    after
+        stop()
+    end.
 
 -endif.
