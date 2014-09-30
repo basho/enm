@@ -134,7 +134,7 @@ stop() ->
     wait_for_stop().
 
 -spec close(nnsocket()) -> ok.
-close(Sock) ->
+close(Sock) when is_port(Sock) ->
     try
         binary_to_term(port_control(Sock, ?ENM_CLOSE, <<>>))
     after
@@ -143,30 +143,30 @@ close(Sock) ->
     ok.
 
 -spec shutdown(nnsocket(), nnid()) -> ok | {error, any()}.
-shutdown(Sock, Id) ->
+shutdown(Sock, Id) when is_port(Sock) ->
     binary_to_term(port_control(Sock, ?ENM_SHUTDOWN, <<Id:32/big>>)).
 
 -spec connect(nnsocket(), nnurl()) -> {ok, nnid()} | {error, any()}.
-connect(Sock, Url) ->
+connect(Sock, Url) when is_port(Sock) ->
     binary_to_term(port_control(Sock, ?ENM_CONNECT, url(Url))).
 
 -spec bind(nnsocket(), nnurl()) -> {ok, nnid()} | {error, any()}.
-bind(Sock, Url) ->
+bind(Sock, Url) when is_port(Sock) ->
     binary_to_term(port_control(Sock, ?ENM_BIND, url(Url))).
 
 -spec getopts(nnsocket(), nnoptnames()) -> {ok, nngetopts()} | {error, any()}.
-getopts(Sock, OptNames) ->
+getopts(Sock, OptNames) when is_port(Sock) ->
     OptBin = validate_opt_names(OptNames),
     binary_to_term(port_control(Sock, ?ENM_GETOPTS, OptBin)).
 
 -spec setopts(nnsocket(), nnsetopts()) -> ok | {error, any()}.
-setopts(Sock, Opts) ->
+setopts(Sock, Opts) when is_port(Sock) ->
     {ok, [{type,Type}]} = getopts(Sock, [type]),
     OptBin = validate_opts(normalize_opts(Opts), Type),
     binary_to_term(port_control(Sock, ?ENM_SETOPTS, OptBin)).
 
 -spec controlling_process(nnsocket(), pid()) -> ok | {error, any()}.
-controlling_process(Sock, NewOwner) ->
+controlling_process(Sock, NewOwner) when is_port(Sock) ->
     case erlang:port_info(Sock, connected) of
         {connected, NewOwner} ->
             ok;
@@ -268,15 +268,15 @@ respondent(Opts) ->
     socket(nnrespondent, [], [], Opts).
 
 -spec send(nnsocket(), iodata()) -> ok | {error, any()}.
-send(Sock, Data) ->
+send(Sock, Data) when is_port(Sock) ->
     true = port_command(Sock, Data),
     ok.
 
 -spec recv(nnsocket()) -> {ok, nndata()} | {error, any()}.
 -spec recv(nnsocket(), timeout()) -> {ok, nndata()} | {error, any()}.
-recv(Sock) ->
+recv(Sock) when is_port(Sock) ->
     recv(Sock, infinity).
-recv(Sock, Timeout) ->
+recv(Sock, Timeout) when is_port(Sock) ->
     Ref = make_ref(),
     Bin = term_to_binary(Ref),
     case binary_to_term(port_control(Sock, ?ENM_RECV, Bin)) of
