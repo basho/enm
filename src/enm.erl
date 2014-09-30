@@ -411,6 +411,7 @@ open_socket(Type, Opts) ->
         Protocol = protocol(Type),
         case binary_to_term(port_control(Sock, Protocol, OptBin)) of
             ok ->
+                erlang:port_set_data(Sock, ?MODULE),
                 {ok, Sock};
             Error ->
                 erlang:port_close(Sock),
