@@ -411,7 +411,7 @@ enm_create_socket(EnmData* d, EnmArgs* args)
 
 static ErlDrvSSizeT
 enm_control(ErlDrvData drv_data, unsigned int command,
-              char* buf, ErlDrvSizeT len, char** rbuf, ErlDrvSizeT rlen)
+            char* buf, ErlDrvSizeT len, char** rbuf, ErlDrvSizeT rlen)
 {
     EnmData* d = (EnmData*)drv_data;
     EnmRecv *rcv, *cur, *prev;
