@@ -418,8 +418,10 @@ enm_control(ErlDrvData drv_data, unsigned int command,
     EnmArgs args;
     int rc, err, index, how, vsn;
     void* bf;
+    char* outbuf;
     ei_x_buff xb;
     erlang_ref ref;
+    ErlDrvBinary* bin;
 
     memset(&args, 0, sizeof args);
     args.buf = buf;
@@ -561,26 +563,44 @@ enm_control(ErlDrvData drv_data, unsigned int command,
             } else
                 break;
         }
+        bin = 0;
         if (xb.index == 0) {
-            ei_x_new_with_version(&xb);
-            ei_x_encode_tuple_header(&xb, 2);
-            ei_x_encode_ref(&xb, &ref);
+            /*
+             * We assume we need 40 bytes at the front of the encoded term
+             * buffer for the version, tuple header, and ref. If that plus
+             * the received data length is greater than rlen, it won't fit
+             * into *rbuf, so we encode directly into a binary instead.
+             */
+            if (40+rc > rlen) {
+                bin = driver_alloc_binary(40+rc);
+                *rbuf = (char*)bin;
+                outbuf = bin->orig_bytes;
+            } else
+                outbuf = *rbuf;
+            index = 0;
+            ei_encode_version(outbuf, &index);
+            ei_encode_tuple_header(outbuf, &index, 2);
+            ei_encode_ref(outbuf, &index, &ref);
             if (d->b.listmode)
-                ei_x_encode_string_len(&xb, bf, rc);
+                ei_encode_string_len(outbuf, &index, bf, rc);
             else
-                ei_x_encode_binary(&xb, bf, rc);
+                ei_encode_binary(outbuf, &index, bf, rc);
             nn_freemsg(bf);
+            if (*rbuf == (char*)bin)
+                bin->orig_size = index;
+            rlen = index;
+        } else {
+            if (xb.index <= rlen)
+                outbuf = *rbuf;
+            else {
+                bin = driver_alloc_binary(xb.index);
+                *rbuf = (char*)bin;
+                outbuf = bin->orig_bytes;
+            }
+            memcpy(outbuf, xb.buff, xb.index);
+            ei_x_free(&xb);
+            rlen = xb.index;
         }
-        xb.index++;
-        if (xb.index <= rlen)
-            memcpy(*rbuf, xb.buff, xb.index);
-        else {
-            ErlDrvBinary* bin = driver_alloc_binary(xb.index);
-            memcpy(bin->orig_bytes, xb.buff, xb.index);
-            *rbuf = (char*)bin;
-        }
-        rlen = xb.index;
-        ei_x_free(&xb);
         return rlen;
         break;
 
