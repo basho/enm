@@ -136,6 +136,33 @@ enm_read_select(EnmData* d, int start)
     return 0;
 }
 
+static void
+enm_add_waiter(EnmData* d, erlang_ref* ref)
+{
+    EnmRecv *rcv, *cur;
+
+    rcv = driver_alloc(sizeof(EnmRecv));
+    if (rcv == 0)
+        driver_failure(d->port, ENOMEM);
+    memcpy(&rcv->ref, ref, sizeof *ref);
+    rcv->rcvr = driver_caller(d->port);
+    rcv->next = 0;
+    driver_monitor_process(d->port, rcv->rcvr, &rcv->monitor);
+    cur = d->waiting_recvs;
+    if (cur == 0)
+        d->waiting_recvs = rcv;
+    else {
+        while (cur) {
+            if (cur->next != 0)
+                cur = cur->next;
+            else {
+                cur->next = rcv;
+                break;
+            }
+        }
+    }
+}
+
 static int
 enm_init()
 {
@@ -414,7 +441,7 @@ enm_control(ErlDrvData drv_data, unsigned int command,
             char* buf, ErlDrvSizeT len, char** rbuf, ErlDrvSizeT rlen)
 {
     EnmData* d = (EnmData*)drv_data;
-    EnmRecv *rcv, *cur, *prev;
+    EnmRecv *cur, *prev;
     EnmArgs args;
     int rc, err, index, how, vsn;
     void* bf;
@@ -514,39 +541,31 @@ enm_control(ErlDrvData drv_data, unsigned int command,
         ei_decode_version(buf, &index, &vsn);
         ei_decode_ref(buf, &index, &ref);
         xb.index = 0;
-        for (;;) {
+        /*
+         * If there are already waiting receivers, just add this recv to
+         * the queue to preserve recv order.
+         */
+        if (d->waiting_recvs) {
+            enm_add_waiter(d, &ref);
+            ei_x_new_with_version(&xb);
+            ei_x_encode_tuple_header(&xb, 2);
+            ei_x_encode_ref(&xb, &ref);
+            ei_x_encode_atom(&xb, "wait");
+            enm_read_select(d, 1);
+        }
+        while (xb.index == 0) {
             rc = nn_recv(d->fd, &bf, NN_MSG, NN_DONTWAIT);
             if (rc < 0) {
                 err = errno;
                 if (err == EINTR)
                     continue;
                 else if (err == EAGAIN) {
-                    rcv = driver_alloc(sizeof(EnmRecv));
-                    if (rcv == 0)
-                        driver_failure(d->port, ENOMEM);
-                    memcpy(&rcv->ref, &ref, sizeof ref);
-                    rcv->rcvr = driver_caller(d->port);
-                    rcv->next = 0;
-                    driver_monitor_process(d->port, rcv->rcvr, &rcv->monitor);
-                    cur = d->waiting_recvs;
-                    if (cur == 0)
-                        d->waiting_recvs = rcv;
-                    else {
-                        while (cur) {
-                            if (cur->next == 0)
-                                cur = cur->next;
-                            else {
-                                cur->next = rcv;
-                                break;
-                            }
-                        }
-                    }
+                    enm_add_waiter(d, &ref);
                     ei_x_new_with_version(&xb);
                     ei_x_encode_tuple_header(&xb, 2);
                     ei_x_encode_ref(&xb, &ref);
                     ei_x_encode_atom(&xb, "wait");
                     enm_read_select(d, 1);
-                    break;
                 } else {
                     char errstr[64];
                     enm_write_select(d, 0);
@@ -558,7 +577,6 @@ enm_control(ErlDrvData drv_data, unsigned int command,
                     ei_x_encode_atom(&xb, "error");
                     enm_errno_str(err, errstr);
                     ei_x_encode_atom(&xb, errstr);
-                    break;
                 }
             } else
                 break;
@@ -705,7 +723,7 @@ enm_ready_input(ErlDrvData drv_data, ErlDrvEvent event)
             driver_demonitor_process(d->port, &rcv->monitor);
             d->waiting_recvs = rcv->next;
             driver_free(rcv);
-            if (!d->b.active)
+            if (!d->b.active && d->waiting_recvs == 0)
                 enm_read_select(d, 0);
         } else {
             ErlDrvTermData term[] = {
