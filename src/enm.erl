@@ -397,21 +397,29 @@ socket(Type, [], [], Opts0) ->
             socket(Type, Bind, Connect, lists:reverse(Opts))
     end;
 socket(Type, [{bind,Url}|_], [], Opts) ->
-    {ok, Sock} = open_socket(Type, Opts),
-    case bind(Sock, Url) of
-        {ok, _} ->
-            {ok, Sock};
+    case open_socket(Type, Opts) of
+        {ok, Sock} ->
+            case bind(Sock, Url) of
+                {ok, _} ->
+                    {ok, Sock};
+                Error ->
+                    close(Sock),
+                    Error
+            end;
         Error ->
-            close(Sock),
             Error
     end;
 socket(Type, [], [{connect,Url}|_], Opts) ->
-    {ok, Sock} = open_socket(Type, Opts),
-    case connect(Sock, Url) of
-        {ok, _} ->
-            {ok, Sock};
+    case open_socket(Type, Opts) of
+        {ok, Sock} ->
+            case connect(Sock, Url) of
+                {ok, _} ->
+                    {ok, Sock};
+                Error ->
+                    close(Sock),
+                    Error
+            end;
         Error ->
-            close(Sock),
             Error
     end;
 socket(Type, _, _, Opts) ->
