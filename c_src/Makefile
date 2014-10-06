@@ -1,4 +1,4 @@
-NANOMSG := nanomsg-0.4-beta
+NANOMSG := nanomsg-0.4-beta-60-g742e46d
 NANOMSG_LIB := lib/libnanomsg.a
 NANOMSG_TARBALL := $(NANOMSG).tar.gz
 CLEAN := rm -rf $(NANOMSG) bin include lib
