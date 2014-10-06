@@ -441,6 +441,7 @@ enm_control(ErlDrvData drv_data, unsigned int command,
             char* buf, ErlDrvSizeT len, char** rbuf, ErlDrvSizeT rlen)
 {
     EnmData* d = (EnmData*)drv_data;
+    ErlDrvSSizeT result;
     EnmRecv *cur, *prev;
     EnmArgs args;
     int rc, err, index, how, vsn;
@@ -497,9 +498,20 @@ enm_control(ErlDrvData drv_data, unsigned int command,
     case ENM_CLOSE:
         enm_write_select(d, 0);
         enm_read_select(d, 0);
-        if (d->fd != -1)
-            nn_close(d->fd);
+        result = 0;
+        err = 0;
+        if (d->fd != -1) {
+            do {
+                rc = nn_close(d->fd);
+                if (rc < 0 ) {
+                    err = errno;
+                    if (err == EBADF)
+                        result = (ErlDrvSSizeT)ERL_DRV_ERROR_BADARG;
+                }
+            } while (err == EINTR);
+        }
         d->fd = d->sfd = d->rfd = -1;
+        if (result != 0) return result;
         break;
 
     case ENM_SHUTDOWN:
@@ -510,13 +522,13 @@ enm_control(ErlDrvData drv_data, unsigned int command,
             rc = nn_shutdown(d->fd, how);
             if (rc < 0) {
                 err = errno;
-                if (err == EINTR)
-                    continue;
-                else if (err != EINVAL) {
+                if (err == EBADF)
+                    return (ErlDrvSSizeT)ERL_DRV_ERROR_BADARG;
+                else if (err != EINTR) {
                     enm_write_select(d, 0);
                     enm_read_select(d, 0);
+                    return enm_errno_tuple(*rbuf, err);
                 }
-                return enm_errno_tuple(*rbuf, err);
             } else
                 break;
         }
