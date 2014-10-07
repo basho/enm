@@ -188,6 +188,7 @@ enm_start(ErlDrvPort port, char* command)
     EnmData* d = (EnmData*)driver_alloc(sizeof(EnmData));
     memset(d, 0, sizeof *d);
     d->port = port;
+    d->busy_limit = 128*1024;
     d->waiting_recvs = 0;
     set_port_control_flags(port, PORT_CONTROL_FLAG_BINARY);
     return (ErlDrvData)d;
@@ -304,8 +305,14 @@ enm_outputv(ErlDrvData drv_data, ErlIOVec *ev)
                 bin = driver_alloc_binary(vec->iov_len);
                 memcpy(bin->orig_bytes, vec->iov_base, vec->iov_len);
             }
-            if (bin != 0)
+            if (bin != 0) {
                 driver_enq_bin(d->port, bin, 0, bin->orig_size);
+                qtotal = driver_sizeq(d->port);
+                if (qtotal >= d->busy_limit && !d->b.busy) {
+                    d->b.busy = 1;
+                    set_busy_port(d->port, d->b.busy);
+                }
+            }
         }
         if (!d->b.write_poll)
             enm_write_select(d, 1);
@@ -442,6 +449,7 @@ enm_control(ErlDrvData drv_data, unsigned int command,
 {
     EnmData* d = (EnmData*)drv_data;
     ErlDrvSSizeT result;
+    ErlDrvSizeT qsize;
     EnmRecv *cur, *prev;
     EnmArgs args;
     int rc, err, index, how, vsn;
@@ -498,6 +506,9 @@ enm_control(ErlDrvData drv_data, unsigned int command,
     case ENM_CLOSE:
         enm_write_select(d, 0);
         enm_read_select(d, 0);
+        qsize = driver_sizeq(d->port);
+        if (qsize > 0)
+            driver_deq(d->port, qsize);
         result = 0;
         err = 0;
         if (d->fd != -1) {
@@ -779,14 +790,21 @@ enm_ready_output(ErlDrvData drv_data, ErlDrvEvent event)
 
     d->b.writable = 1;
     total = driver_peekqv(d->port, &ev);
-    if (total == 0) return;
+    if (total == 0)
+        return;
     memset(&msghdr, 0, sizeof msghdr);
     msghdr.msg_iov = (struct nn_iovec*)ev.iov;
     msghdr.msg_iovlen = ev.vsize;
     msghdr.msg_control = 0;
     rc = enm_do_send(d, &msghdr);
-    if (rc > 0)
+    if (rc > 0) {
         driver_deq(d->port, rc);
+        total = driver_sizeq(d->port);
+        if (total < d->busy_limit && d->b.busy) {
+            d->b.busy = 0;
+            set_busy_port(d->port, d->b.busy);
+        }
+    }
     if (rc == total && d->b.writable)
         enm_write_select(d, 0);
 }

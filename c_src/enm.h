@@ -84,6 +84,7 @@ typedef struct EnmRecv {
 typedef struct {
     ErlDrvPort port;
     EnmRecv* waiting_recvs;
+    size_t busy_limit;
     int protocol;
     int fd;
     int sfd;
@@ -96,6 +97,7 @@ typedef struct {
         unsigned writable:   1;
         unsigned write_poll: 1;
         unsigned read_poll:  1;
+        unsigned busy:       1;
     } b;
 } EnmData;
 
