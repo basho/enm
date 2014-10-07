@@ -239,19 +239,18 @@ enm_do_send(EnmData* d, const struct nn_msghdr* msghdr)
 
     if (msghdr->msg_iovlen == 0)
         return 0;
+    err = 0;
     do {
         rc = nn_sendmsg(d->fd, msghdr, NN_DONTWAIT);
         if (rc < 0) {
             err = errno;
             switch (err) {
             case EINTR:
-                rc = 0;
+            case EFSM:
+                /* do nothing */
                 break;
             case EAGAIN:
                 d->b.writable = 0;
-                break;
-            case EFSM:
-                /* do nothing */
                 break;
             default:
                 enm_write_select(d, 0);
@@ -259,7 +258,7 @@ enm_do_send(EnmData* d, const struct nn_msghdr* msghdr)
                 driver_failure(d->port, err);
             }
         }
-    } while (rc == 0);
+    } while (err == EINTR);
     return rc;
 }
 
@@ -270,7 +269,7 @@ enm_outputv(ErlDrvData drv_data, ErlIOVec *ev)
     ErlIOVec qev;
     ErlDrvSizeT qtotal;
     struct nn_msghdr msghdr;
-    int i, rc = 0;
+    int i, rc = -1, err;
 
     if (d->fd == -1 || d->protocol == NN_PULL || d->protocol == NN_SUB)
         return;
@@ -280,9 +279,18 @@ enm_outputv(ErlDrvData drv_data, ErlIOVec *ev)
         msghdr.msg_iov = (struct nn_iovec*)qev.iov;
         msghdr.msg_iovlen = qev.vsize;
         msghdr.msg_control = 0;
-        rc = enm_do_send(d, &msghdr);
-        if (rc > 0)
-            driver_deq(d->port, rc);
+        err = 0;
+        do {
+            rc = enm_do_send(d, &msghdr);
+            if (rc < 0) {
+                err = errno;
+                if (err == EAGAIN) {
+                    d->b.writable = 0;
+                    break;
+                } else if (err != EINTR)
+                    driver_failure(d->port, err);
+            }
+        } while (err == EINTR);
     }
     if (ev->vsize == 0)
         return;
@@ -291,7 +299,18 @@ enm_outputv(ErlDrvData drv_data, ErlIOVec *ev)
         msghdr.msg_iov = (struct nn_iovec*)ev->iov;
         msghdr.msg_iovlen = ev->vsize;
         msghdr.msg_control = 0;
-        rc = enm_do_send(d, &msghdr);
+        err = 0;
+        do {
+            rc = enm_do_send(d, &msghdr);
+            if (rc < 0) {
+                err = errno;
+                if (err == EAGAIN) {
+                    d->b.writable = 0;
+                    break;
+                } else if (err != EINTR)
+                    driver_failure(d->port, err);
+            }
+        } while (err == EINTR);
     }
     if (rc < 0 && !d->b.writable) {
         rc = 0;
@@ -493,7 +512,10 @@ enm_control(ErlDrvData drv_data, unsigned int command,
             err = errno;
             enm_write_select(d, 0);
             enm_read_select(d, 0);
-            return enm_errno_tuple(*rbuf, err);
+            if (err == EBADF)
+                return (ErlDrvSSizeT)ERL_DRV_ERROR_BADARG;
+            else
+                return enm_errno_tuple(*rbuf, err);
         }
         index = 0;
         ei_encode_version(*rbuf, &index);
@@ -533,12 +555,13 @@ enm_control(ErlDrvData drv_data, unsigned int command,
             rc = nn_shutdown(d->fd, how);
             if (rc < 0) {
                 err = errno;
-                if (err == EBADF)
-                    return (ErlDrvSSizeT)ERL_DRV_ERROR_BADARG;
-                else if (err != EINTR) {
+                if (err != EINTR) {
                     enm_write_select(d, 0);
                     enm_read_select(d, 0);
-                    return enm_errno_tuple(*rbuf, err);
+                    if (err == EBADF)
+                        return (ErlDrvSSizeT)ERL_DRV_ERROR_BADARG;
+                    else
+                        return enm_errno_tuple(*rbuf, err);
                 }
             } else
                 break;
