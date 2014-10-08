@@ -420,8 +420,15 @@ enm_create_socket(EnmData* d, EnmArgs* args)
             }
         } else {
             optlen = sizeof args->sndbuf;
-            nn_getsockopt(d->fd, NN_SOL_SOCKET, NN_SNDBUF,
-                          &args->sndbuf, &optlen);
+            rc = nn_getsockopt(d->fd, NN_SOL_SOCKET, NN_SNDBUF,
+                               &args->sndbuf, &optlen);
+            if (rc < 0) {
+                err = errno;
+                nn_close(d->fd);
+                d->fd = -1;
+                d->sfd = -1;
+                return enm_errno_tuple(*args->rbuf, err);
+            }
         }
         if (args->sndbuf != 0) {
             ErlDrvSizeT low = args->sndbuf >> 1, high = args->sndbuf;
