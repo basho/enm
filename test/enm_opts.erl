@@ -199,17 +199,9 @@ misc() ->
     ?assertMatch({ok,[{sndbuf,345678}]}, enm:getopts(Req, [sndbuf])),
     ok = enm:setopts(Req, [{rcvbuf,456789}]),
     ?assertMatch({ok,[{rcvbuf,456789}]}, enm:getopts(Req, [rcvbuf])),
-    ok = try enm:pull([{sndbuf,12345678}]) of
-             _ -> error(should_have_failed)
-         catch error:badarg -> ok end,
-    ok = try enm:sub([{sndbuf,12345678}]) of
-             _ -> error(should_have_failed)
-         catch error:badarg -> ok end,
-    ok = try enm:push([{rcvbuf,12345678}]) of
-             _ -> error(should_have_failed)
-         catch error:badarg -> ok end,
-    ok = try enm:pub([{rcvbuf,12345678}]) of
-             _ -> error(should_have_failed)
-         catch error:badarg -> ok end,
+    ?assertMatch({error,einval}, enm:pull([{sndbuf,12345678}])),
+    ?assertMatch({error,einval}, enm:sub([{sndbuf,12345678}])),
+    ?assertMatch({error,einval}, enm:push([{rcvbuf,12345678}])),
+    ?assertMatch({error,einval}, enm:pub([{rcvbuf,12345678}])),
     ok = enm:close(Req),
     ok.

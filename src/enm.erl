@@ -165,8 +165,12 @@ getopts(Sock, OptNames) when is_port(Sock) ->
 setopts(Sock, Opts) when is_port(Sock) ->
     case getopts(Sock, [type]) of
         {ok, [{type,Type}]} ->
-            OptBin = validate_opts(normalize_opts(Opts), Type),
-            call_control(Sock, ?ENM_SETOPTS, OptBin);
+            case validate_opts(normalize_opts(Opts), Type) of
+                OptBin when is_binary(OptBin) ->
+                    call_control(Sock, ?ENM_SETOPTS, OptBin);
+                Error ->
+                    Error
+            end;
         Error ->
             Error
     end.
@@ -438,12 +442,17 @@ call_control(Sock, Cmd, Bin) ->
 open_socket(Type, Opts) ->
     Sock = erlang:open_port({spawn_driver, ?SHLIB}, [binary]),
     try
-        OptBin = validate_opts(normalize_opts(Opts), Type),
-        Protocol = protocol(Type),
-        case binary_to_term(port_control(Sock, Protocol, OptBin)) of
-            ok ->
-                erlang:port_set_data(Sock, ?MODULE),
-                {ok, Sock};
+        case validate_opts(normalize_opts(Opts), Type) of
+            OptBin when is_binary(OptBin) ->
+                Protocol = protocol(Type),
+                case binary_to_term(port_control(Sock, Protocol, OptBin)) of
+                    ok ->
+                        erlang:port_set_data(Sock, ?MODULE),
+                        {ok, Sock};
+                    Error ->
+                        erlang:port_close(Sock),
+                        Error
+                end;
             Error ->
                 erlang:port_close(Sock),
                 Error
@@ -537,12 +546,12 @@ validate_opts([{SubOrUnsub,Topic}|Opts]=AllOpts, nnsub, Bin)
     end;
 validate_opts([{resend_ivl,RI}|Opts], nnreq, Bin) when is_integer(RI), RI > 0 ->
     validate_opts(Opts, nnreq, <<Bin/binary, ?ENM_RESEND_IVL, RI:32/big>>);
-validate_opts([{sndbuf,_}|_]=Opts, Type, Bin) when Type == nnpull; Type == nnsub ->
-    error(badarg, [Opts, Type, Bin]);
+validate_opts([{sndbuf,_}|_], Type, _Bin) when Type == nnpull; Type == nnsub ->
+    {error,einval};
 validate_opts([{sndbuf,Sndbuf}|Opts], Type, Bin) when is_integer(Sndbuf) ->
     validate_opts(Opts, Type, <<Bin/binary, ?ENM_SNDBUF, Sndbuf:32/big>>);
-validate_opts([{rcvbuf,_}|_]=Opts, Type, Bin) when Type == nnpush; Type == nnpub ->
-    error(badarg, [Opts, Type, Bin]);
+validate_opts([{rcvbuf,_}|_], Type, _Bin) when Type == nnpush; Type == nnpub ->
+    {error, einval};
 validate_opts([{rcvbuf,Rcvbuf}|Opts], Type, Bin) when is_integer(Rcvbuf) ->
     validate_opts(Opts, Type, <<Bin/binary, ?ENM_RCVBUF, Rcvbuf:32/big>>);
 validate_opts([{nodelay,NoDelay}|Opts], Type, Bin) when is_boolean(NoDelay) ->
