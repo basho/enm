@@ -52,7 +52,18 @@ suspend_test_() ->
              ok = enm:send(R, Data),
              ok = enm:send(R, Data),
              ?assertMatch(false,port_command(R,Data,[nosuspend])),
+             ok = enm:setopts(S, [{rcvbuf,?SNDBUF}]),
+             clear_receiver(S),
+             ?assertMatch(true,port_command(R,Data,[nosuspend])),
              ok = enm:close(R),
              ok = enm:close(S),
              ok
      end}.
+
+clear_receiver(S) ->
+    case enm:recv(S, 500) of
+        {ok,_} ->
+            clear_receiver(S);
+        {error,etimedout} ->
+            ok
+    end.
