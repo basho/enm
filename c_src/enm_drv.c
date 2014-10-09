@@ -291,7 +291,11 @@ enm_outputv(ErlDrvData drv_data, ErlIOVec *ev)
             }
         } while (err == EINTR);
     }
-    if (ev->vsize == 0)
+    /*
+     * Do nothing if the message has no data
+     */
+    if (ev->vsize == 0 ||
+        (ev->vsize == 1 && *ev->binv == 0 && ev->iov->iov_len == 0))
         return;
     if (d->b.writable) {
         memset(&msghdr, 0, sizeof msghdr);

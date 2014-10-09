@@ -67,3 +67,19 @@ clear_receiver(S) ->
         {error,etimedout} ->
             ok
     end.
+
+empty_send_test_() ->
+    {setup,
+     fun enm:start_link/0,
+     fun(_) -> enm:stop() end,
+     fun() ->
+             {ok,S} = enm:pair([{bind,?URL},{active,false}]),
+             {ok,R} = enm:pair([{connect,?URL}]),
+             %% sending an empty iolist should result in no data arriving
+             %% at the receiver
+             ok = enm:send(R, <<>>),
+             ?assertMatch({error,etimedout},enm:recv(S,100)),
+             ok = enm:close(R),
+             ok = enm:close(S),
+             ok
+     end}.
