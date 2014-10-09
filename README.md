@@ -213,31 +213,33 @@ directory.
 
 ### Pipeline
 
-    -module(pipeline).
-    -export([start/0]).
+```erlang
+-module(pipeline).
+-export([start/0]).
 
-    start() ->
-        enm:start_link(),
-        Url = "inproc://pipeline",
-        {ok,Pull} = enm:pull([{bind,Url},list]),
-        {ok,Push} = enm:push([{connect,Url},list]),
-        Send1 = "Hello, World!",
-        io:format("pushing message \"~s\"~n", [Send1]),
-        ok = enm:send(Push, Send1),
-        receive
-            {nnpull,Pull,Send1} ->
-                io:format("pulling message \"~s\"~n", [Send1])
-        end,
-        Send2 = "Goodbye.",
-        io:format("pushing message \"~s\"~n", [Send2]),
-        ok = enm:send(Push, Send2),
-        receive
-            {nnpull,Pull,Send2} ->
-                io:format("pulling message \"~s\"~n", [Send2])
-        end,
-        enm:close(Push),
-        enm:close(Pull),
-        enm:stop().
+start() ->
+    enm:start_link(),
+    Url = "inproc://pipeline",
+    {ok,Pull} = enm:pull([{bind,Url},list]),
+    {ok,Push} = enm:push([{connect,Url},list]),
+    Send1 = "Hello, World!",
+    io:format("pushing message \"~s\"~n", [Send1]),
+    ok = enm:send(Push, Send1),
+    receive
+        {nnpull,Pull,Send1} ->
+            io:format("pulling message \"~s\"~n", [Send1])
+    end,
+    Send2 = "Goodbye.",
+    io:format("pushing message \"~s\"~n", [Send2]),
+    ok = enm:send(Push, Send2),
+    receive
+        {nnpull,Pull,Send2} ->
+            io:format("pulling message \"~s\"~n", [Send2])
+    end,
+    enm:close(Push),
+    enm:close(Pull),
+    enm:stop().
+```
 
 Here, note the pattern matching in the `receive` statements where we use
 the data variables set for the sent messages as the data to be expected to
@@ -250,104 +252,112 @@ being sent, the `receive` statements would wait forever.
 
 #### Pipeline Results
 
-    1> c("examples/pipeline.erl", [{o,"examples"}]).
-    {ok,pipeline}
-    2> pipeline:start().
-    pushing message "Hello, World!"
-    pulling message "Hello, World!"
-    pushing message "Goodbye."
-    pulling message "Goodbye."
-    ok
+```erlang
+1> c("examples/pipeline.erl", [{o,"examples"}]).
+{ok,pipeline}
+2> pipeline:start().
+pushing message "Hello, World!"
+pulling message "Hello, World!"
+pushing message "Goodbye."
+pulling message "Goodbye."
+ok
+```
 
 ### Request/Reply
 
-    -module(request_reply).
-    -export([start/0]).
+```erlang
+-module(request_reply).
+-export([start/0]).
 
-    start() ->
-        enm:start_link(),
-        Url = "inproc://request_reply",
-        {ok,Rep} = enm:rep([{bind,Url}]),
-        {ok,Req} = enm:req([{connect,Url}]),
-        DateReq = <<"DATE">>,
-        io:format("sending date request~n"),
-        ok = enm:send(Req, DateReq),
-        receive
-            {nnrep,Rep,DateReq} ->
-                io:format("received date request~n"),
-                Now = httpd_util:rfc1123_date(),
-                io:format("sending date ~s~n", [Now]),
-                ok = enm:send(Rep, Now)
-        end,
-        receive
-            {nnreq,Req,Date} ->
-                io:format("received date ~s~n", [Date])
-        end,
-        enm:close(Req),
-        enm:close(Rep),
-        enm:stop().
+start() ->
+    enm:start_link(),
+    Url = "inproc://request_reply",
+    {ok,Rep} = enm:rep([{bind,Url}]),
+    {ok,Req} = enm:req([{connect,Url}]),
+    DateReq = <<"DATE">>,
+    io:format("sending date request~n"),
+    ok = enm:send(Req, DateReq),
+    receive
+        {nnrep,Rep,DateReq} ->
+            io:format("received date request~n"),
+            Now = httpd_util:rfc1123_date(),
+            io:format("sending date ~s~n", [Now]),
+            ok = enm:send(Rep, Now)
+    end,
+    receive
+        {nnreq,Req,Date} ->
+            io:format("received date ~s~n", [Date])
+    end,
+    enm:close(Req),
+    enm:close(Rep),
+    enm:stop().
+```
 
 This is similar to the [pipeline example](#pipeline) except that data flows
 in both directions, and both sockets default to binary mode.
 
 #### Request/Reply Results
 
-    1> c("examples/request_reply.erl", [{o,"examples"}]).
-    {ok,request_reply}
-    2> request_reply:start().
-    sending date request
-    received date request
-    sending date Tue, 09 Sep 2014 23:05:26 GMT
-    received date Tue, 09 Sep 2014 23:05:26 GMT
-    ok
+```erlang
+1> c("examples/request_reply.erl", [{o,"examples"}]).
+{ok,request_reply}
+2> request_reply:start().
+sending date request
+received date request
+sending date Tue, 09 Sep 2014 23:05:26 GMT
+received date Tue, 09 Sep 2014 23:05:26 GMT
+ok
+```
 
 ### Pair
 
-    -module(pair).
-    -export([start/0, node/4]).
+```erlang
+-module(pair).
+-export([start/0, node/4]).
 
-    start() ->
-        enm:start_link(),
-        Self = self(),
-        Url = "inproc://pair",
-        spawn(?MODULE, node, [Self, Url, bind, "Node0"]),
-        spawn(?MODULE, node, [Self, Url, connect, "Node1"]),
-        collect(["Node0","Node1"]).
+start() ->
+    enm:start_link(),
+    Self = self(),
+    Url = "inproc://pair",
+    spawn(?MODULE, node, [Self, Url, bind, "Node0"]),
+    spawn(?MODULE, node, [Self, Url, connect, "Node1"]),
+    collect(["Node0","Node1"]).
 
-    node(Parent, Url, F, Name) ->
-        {ok,P} = enm:pair([{active,3}]),
-        {ok,Id} = enm:F(P,Url),
-        send_recv(P, Name),
-        enm:shutdown(P, Id),
-        Parent ! {done,Name}.
+node(Parent, Url, F, Name) ->
+    {ok,P} = enm:pair([{active,3}]),
+    {ok,Id} = enm:F(P,Url),
+    send_recv(P, Name),
+    enm:shutdown(P, Id),
+    Parent ! {done,Name}.
 
-    send_recv(Sock, Name) ->
-        receive
-            {_,Sock,Buf} ->
-                io:format("~s received \"~s\"~n", [Name, Buf])
-        after
-            100 ->
-                ok
-        end,
-        case enm:getopts(Sock, [active]) of
-            {ok, [{active,false}]} ->
-                ok;
-            {error, Error} ->
-                error(Error);
-            _ ->
-                timer:sleep(1000),
-                io:format("~s sending \"~s\"~n", [Name, Name]),
-                ok = enm:send(Sock, Name),
-                send_recv(Sock, Name)
-        end.
+send_recv(Sock, Name) ->
+    receive
+        {_,Sock,Buf} ->
+            io:format("~s received \"~s\"~n", [Name, Buf])
+    after
+        100 ->
+            ok
+    end,
+    case enm:getopts(Sock, [active]) of
+        {ok, [{active,false}]} ->
+            ok;
+        {error, Error} ->
+            error(Error);
+        _ ->
+            timer:sleep(1000),
+            io:format("~s sending \"~s\"~n", [Name, Name]),
+            ok = enm:send(Sock, Name),
+            send_recv(Sock, Name)
+    end.
 
-    collect([]) ->
-        ok;
-    collect([Name|Names]) ->
-        receive
-            {done,Name} ->
-                collect(Names)
-        end.
+collect([]) ->
+    ok;
+collect([Name|Names]) ->
+    receive
+        {done,Name} ->
+            collect(Names)
+    end.
+```
 
 This code is a little more involved than previous examples because we spawn
 two child processes that receive and send messages. Note how we use the
@@ -357,22 +367,24 @@ check for when each socket flips into `{active,false}` mode.
 
 #### Pair Results
 
-    1> c("examples/pair.erl",[{o,"examples"}]).
-    {ok,pair}
-    2> pair:start().
-    Node0 sending "Node0"
-    Node1 sending "Node1"
-    Node0 received "Node1"
-    Node1 received "Node0"
-    Node1 sending "Node1"
-    Node0 sending "Node0"
-    Node0 received "Node1"
-    Node1 received "Node0"
-    Node1 sending "Node1"
-    Node0 sending "Node0"
-    Node0 received "Node1"
-    Node1 received "Node0"
-    ok
+```erlang
+1> c("examples/pair.erl",[{o,"examples"}]).
+{ok,pair}
+2> pair:start().
+Node0 sending "Node0"
+Node1 sending "Node1"
+Node0 received "Node1"
+Node1 received "Node0"
+Node1 sending "Node1"
+Node0 sending "Node0"
+Node0 received "Node1"
+Node1 received "Node0"
+Node1 sending "Node1"
+Node0 sending "Node0"
+Node0 received "Node1"
+Node1 received "Node0"
+ok
+```
 
 ### Pub/Sub
 
