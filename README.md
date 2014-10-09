@@ -388,59 +388,61 @@ ok
 
 ### Pub/Sub
 
-    -module(pubsub).
-    -export([start/0]).
+```erlang
+-module(pubsub).
+-export([start/0]).
 
-    -define(COUNT, 3).
+-define(COUNT, 3).
 
-    start() ->
-        enm:start_link(),
-        Url = "inproc://pubsub",
-        Pub = pub(Url),
-        collect(subs(Url, self())),
-        enm:close(Pub),
-        enm:stop().
+start() ->
+    enm:start_link(),
+    Url = "inproc://pubsub",
+    Pub = pub(Url),
+    collect(subs(Url, self())),
+    enm:close(Pub),
+    enm:stop().
 
-    pub(Url) ->
-        {ok,Pub} = enm:pub([{bind,Url}]),
-        spawn_link(fun() -> pub(Pub, ?COUNT) end),
-        Pub.
-    pub(_, 0) ->
-        ok;
-    pub(Pub, Count) ->
-        Now = httpd_util:rfc1123_date(),
-        io:format("publishing date \"~s\"~n", [Now]),
-        ok = enm:send(Pub, ["DATE: ", Now]),
-        timer:sleep(1000),
-        pub(Pub, Count-1).
+pub(Url) ->
+    {ok,Pub} = enm:pub([{bind,Url}]),
+    spawn_link(fun() -> pub(Pub, ?COUNT) end),
+    Pub.
+pub(_, 0) ->
+    ok;
+pub(Pub, Count) ->
+    Now = httpd_util:rfc1123_date(),
+    io:format("publishing date \"~s\"~n", [Now]),
+    ok = enm:send(Pub, ["DATE: ", Now]),
+    timer:sleep(1000),
+    pub(Pub, Count-1).
 
-    subs(Url, Parent) ->
-        subs(Url, Parent, ?COUNT, []).
-    subs(_, _, 0, Acc) ->
-        Acc;
-    subs(Url, Parent, Count, Acc) ->
-        {ok, Sub} = enm:sub([{connect,Url},{subscribe,"DATE:"},{active,false}]),
-        Name = "Subscriber" ++ integer_to_list(Count),
-        spawn_link(fun() -> sub(Sub, Parent, Name) end),
-        subs(Url, Parent, Count-1, [Name|Acc]).
-    sub(Sub, Parent, Name) ->
-        case enm:recv(Sub, 2000) of
-            {ok,Data} ->
-                io:format("~s received \"~s\"~n", [Name, Data]),
-                sub(Sub, Parent, Name);
-            {error,etimedout} ->
-                enm:close(Sub),
-                Parent ! {done, Name},
-                ok
-        end.
+subs(Url, Parent) ->
+    subs(Url, Parent, ?COUNT, []).
+subs(_, _, 0, Acc) ->
+    Acc;
+subs(Url, Parent, Count, Acc) ->
+    {ok, Sub} = enm:sub([{connect,Url},{subscribe,"DATE:"},{active,false}]),
+    Name = "Subscriber" ++ integer_to_list(Count),
+    spawn_link(fun() -> sub(Sub, Parent, Name) end),
+    subs(Url, Parent, Count-1, [Name|Acc]).
+sub(Sub, Parent, Name) ->
+    case enm:recv(Sub, 2000) of
+        {ok,Data} ->
+            io:format("~s received \"~s\"~n", [Name, Data]),
+            sub(Sub, Parent, Name);
+        {error,etimedout} ->
+            enm:close(Sub),
+            Parent ! {done, Name},
+            ok
+    end.
 
-    collect([Sub|Subs]) ->
-        receive
-            {done,Sub} ->
-                collect(Subs)
-        end;
-    collect([]) ->
-        ok.
+collect([Sub|Subs]) ->
+    receive
+        {done,Sub} ->
+            collect(Subs)
+    end;
+collect([]) ->
+    ok.
+```
 
 This code sets up a publisher and 3 subscribers, and the publisher
 publishes dates to the subscribers. It includes the text "DATE:" in each
@@ -453,81 +455,85 @@ receive messages in an active mode from a socket.
 
 #### Pub/Sub Results
 
-    1> c("examples/pubsub.erl", [{o,"examples"}]).
-    {ok,pubsub}
-    2> pubsub:start().
-    publishing date "Tue, 09 Sep 2014 23:08:10 GMT"
-    Subscriber3 received "DATE: Tue, 09 Sep 2014 23:08:10 GMT"
-    Subscriber2 received "DATE: Tue, 09 Sep 2014 23:08:10 GMT"
-    Subscriber1 received "DATE: Tue, 09 Sep 2014 23:08:10 GMT"
-    publishing date "Tue, 09 Sep 2014 23:08:11 GMT"
-    Subscriber3 received "DATE: Tue, 09 Sep 2014 23:08:11 GMT"
-    Subscriber2 received "DATE: Tue, 09 Sep 2014 23:08:11 GMT"
-    Subscriber1 received "DATE: Tue, 09 Sep 2014 23:08:11 GMT"
-    publishing date "Tue, 09 Sep 2014 23:08:12 GMT"
-    Subscriber3 received "DATE: Tue, 09 Sep 2014 23:08:12 GMT"
-    Subscriber2 received "DATE: Tue, 09 Sep 2014 23:08:12 GMT"
-    Subscriber1 received "DATE: Tue, 09 Sep 2014 23:08:12 GMT"
-    ok
+```erlang
+1> c("examples/pubsub.erl", [{o,"examples"}]).
+{ok,pubsub}
+2> pubsub:start().
+publishing date "Tue, 09 Sep 2014 23:08:10 GMT"
+Subscriber3 received "DATE: Tue, 09 Sep 2014 23:08:10 GMT"
+Subscriber2 received "DATE: Tue, 09 Sep 2014 23:08:10 GMT"
+Subscriber1 received "DATE: Tue, 09 Sep 2014 23:08:10 GMT"
+publishing date "Tue, 09 Sep 2014 23:08:11 GMT"
+Subscriber3 received "DATE: Tue, 09 Sep 2014 23:08:11 GMT"
+Subscriber2 received "DATE: Tue, 09 Sep 2014 23:08:11 GMT"
+Subscriber1 received "DATE: Tue, 09 Sep 2014 23:08:11 GMT"
+publishing date "Tue, 09 Sep 2014 23:08:12 GMT"
+Subscriber3 received "DATE: Tue, 09 Sep 2014 23:08:12 GMT"
+Subscriber2 received "DATE: Tue, 09 Sep 2014 23:08:12 GMT"
+Subscriber1 received "DATE: Tue, 09 Sep 2014 23:08:12 GMT"
+ok
+```
 
 ### Survey
 
-    -module(survey).
-    -export([start/0]).
+```erlang
+-module(survey).
+-export([start/0]).
 
-    -define(COUNT, 3).
+-define(COUNT, 3).
 
-    start() ->
-        enm:start_link(),
-        Url = "inproc://survey",
-        Self = self(),
-        {ok,Survey} = enm:surveyor([{bind,Url},{deadline,3000}]),
-        Clients = clients(Url, Self),
-        ok = enm:send(Survey, httpd_util:rfc1123_date()),
-        get_responses(Survey),
-        wait_for_clients(Clients),
-        enm:close(Survey),
-        enm:stop().
+start() ->
+    enm:start_link(),
+    Url = "inproc://survey",
+    Self = self(),
+    {ok,Survey} = enm:surveyor([{bind,Url},{deadline,3000}]),
+    Clients = clients(Url, Self),
+    ok = enm:send(Survey, httpd_util:rfc1123_date()),
+    get_responses(Survey),
+    wait_for_clients(Clients),
+    enm:close(Survey),
+    enm:stop().
 
-    clients(Url, Parent) ->
-        clients(Url, Parent, ?COUNT, []).
-    clients(_, _, 0, Acc) ->
-        Acc;
-    clients(Url, Parent, Count, Acc) ->
-        {ok, Respondent} = enm:respondent([{connect,Url},{active,false},list]),
-        Name = "Respondent" ++ integer_to_list(Count),
-        Pid = spawn_link(fun() -> client(Respondent, Name, Parent) end),
-        clients(Url, Parent, Count-1, [Pid|Acc]).
+clients(Url, Parent) ->
+    clients(Url, Parent, ?COUNT, []).
+clients(_, _, 0, Acc) ->
+    Acc;
+clients(Url, Parent, Count, Acc) ->
+    {ok, Respondent} = enm:respondent([{connect,Url},{active,false},list]),
+    Name = "Respondent" ++ integer_to_list(Count),
+    Pid = spawn_link(fun() -> client(Respondent, Name, Parent) end),
+    clients(Url, Parent, Count-1, [Pid|Acc]).
 
-    client(Respondent, Name, Parent) ->
-        {ok,Msg} = enm:recv(Respondent, 5000),
-        Date = httpd_util:convert_request_date(Msg),
-        ok = enm:send(Respondent, term_to_binary(Date)),
-        io:format("~s got \"~s\"~n", [Name, Msg]),
-        Parent ! {done, self(), Respondent}.
+client(Respondent, Name, Parent) ->
+    {ok,Msg} = enm:recv(Respondent, 5000),
+    Date = httpd_util:convert_request_date(Msg),
+    ok = enm:send(Respondent, term_to_binary(Date)),
+    io:format("~s got \"~s\"~n", [Name, Msg]),
+    Parent ! {done, self(), Respondent}.
 
-    get_responses(Survey) ->
-        get_responses(Survey, ?COUNT+1).
-    get_responses(_, 0) ->
-        ok;
-    get_responses(Survey, Count) ->
-        receive
-            {nnsurveyor,Survey,BinResp} ->
-                Response = binary_to_term(BinResp),
-                io:format("received survey response ~p~n", [Response]);
-            {nnsurveyor_deadline,Survey} ->
-                io:format("survey has expired~n")
-        end,
-        get_responses(Survey, Count-1).
+get_responses(Survey) ->
+    get_responses(Survey, ?COUNT+1).
+get_responses(_, 0) ->
+    ok;
+get_responses(Survey, Count) ->
+    receive
+        {nnsurveyor,Survey,BinResp} ->
+            Response = binary_to_term(BinResp),
+            io:format("received survey response ~p~n", [Response]);
+        {nnsurveyor_deadline,Survey} ->
+            io:format("survey has expired~n")
+    end,
+    get_responses(Survey, Count-1).
 
-    wait_for_clients([Client|Clients]) ->
-        receive
-            {done,Client,Respondent} ->
-                enm:close(Respondent),
-                wait_for_clients(Clients)
-        end;
-    wait_for_clients([]) ->
-        ok.
+wait_for_clients([Client|Clients]) ->
+    receive
+        {done,Client,Respondent} ->
+            enm:close(Respondent),
+            wait_for_clients(Clients)
+    end;
+wait_for_clients([]) ->
+    ok.
+```
 
 This example creates a surveyor, and several respondents connect to it. The
 `{deadline,3000}` option used when creating the surveyor socket means
@@ -538,89 +544,93 @@ the surveyor socket gets a `{nnsurveyor_deadline,Socket}` message.
 
 #### Survey Results
 
-    1> c("examples/survey.erl", [{o,"examples"}]).
-    {ok,survey}
-    2> survey:start().
-    Respondent3 got "Tue, 09 Sep 2014 23:09:34 GMT"
-    Respondent2 got "Tue, 09 Sep 2014 23:09:34 GMT"
-    Respondent1 got "Tue, 09 Sep 2014 23:09:34 GMT"
-    received survey response {{2014,9,9},{23,9,34}}
-    received survey response {{2014,9,9},{23,9,34}}
-    received survey response {{2014,9,9},{23,9,34}}
-    survey has expired
-    ok
+```erlang
+1> c("examples/survey.erl", [{o,"examples"}]).
+{ok,survey}
+2> survey:start().
+Respondent3 got "Tue, 09 Sep 2014 23:09:34 GMT"
+Respondent2 got "Tue, 09 Sep 2014 23:09:34 GMT"
+Respondent1 got "Tue, 09 Sep 2014 23:09:34 GMT"
+received survey response {{2014,9,9},{23,9,34}}
+received survey response {{2014,9,9},{23,9,34}}
+received survey response {{2014,9,9},{23,9,34}}
+survey has expired
+ok
+```
 
 ### Bus
 
-    -module(bus).
-    -export([start/0]).
+```erlang
+-module(bus).
+-export([start/0]).
 
-    -define(COUNT, 4).
+-define(COUNT, 4).
 
-    start() ->
-        enm:start_link(),
-        UrlBase = "inproc://bus",
-        Buses = connect_buses(UrlBase),
-        Pids = send_and_receive(Buses, self()),
-        wait_for_pids(Pids),
-        enm:stop().
+start() ->
+    enm:start_link(),
+    UrlBase = "inproc://bus",
+    Buses = connect_buses(UrlBase),
+    Pids = send_and_receive(Buses, self()),
+    wait_for_pids(Pids),
+    enm:stop().
 
-    connect_buses(UrlBase) ->
-        connect_buses(UrlBase, lists:seq(1,?COUNT), []).
-    connect_buses(UrlBase, [1=Node|Nodes], Buses) ->
-        Url = make_url(UrlBase, Node),
-        {ok,Bus} = enm:bus([{bind,Url},{active,false}]),
-        {ok,_} = enm:connect(Bus, make_url(UrlBase, 2)),
-        {ok,_} = enm:connect(Bus, make_url(UrlBase, 3)),
-        connect_buses(UrlBase, Nodes, [{Bus,Node}|Buses]);
-    connect_buses(UrlBase, [?COUNT=Node|Nodes], Buses) ->
-        Url = make_url(UrlBase, Node),
-        {ok,Bus} = enm:bus([{bind,Url},{active,false}]),
-        {ok,_} = enm:connect(Bus, make_url(UrlBase, 1)),
-        connect_buses(UrlBase, Nodes, [{Bus,Node}|Buses]);
-    connect_buses(UrlBase, [Node|Nodes], Buses) ->
-        Url = make_url(UrlBase, Node),
-        {ok,Bus} = enm:bus([{bind,Url},{active,false}]),
-        Urls = [make_url(UrlBase,N) || N <- lists:seq(Node+1,?COUNT)],
-        [{ok,_} = enm:connect(Bus,U) || U <- Urls],
-        connect_buses(UrlBase, Nodes, [{Bus,Node}|Buses]);
-    connect_buses(_, [], Buses) ->
-        Buses.
+connect_buses(UrlBase) ->
+    connect_buses(UrlBase, lists:seq(1,?COUNT), []).
+connect_buses(UrlBase, [1=Node|Nodes], Buses) ->
+    Url = make_url(UrlBase, Node),
+    {ok,Bus} = enm:bus([{bind,Url},{active,false}]),
+    {ok,_} = enm:connect(Bus, make_url(UrlBase, 2)),
+    {ok,_} = enm:connect(Bus, make_url(UrlBase, 3)),
+    connect_buses(UrlBase, Nodes, [{Bus,Node}|Buses]);
+connect_buses(UrlBase, [?COUNT=Node|Nodes], Buses) ->
+    Url = make_url(UrlBase, Node),
+    {ok,Bus} = enm:bus([{bind,Url},{active,false}]),
+    {ok,_} = enm:connect(Bus, make_url(UrlBase, 1)),
+    connect_buses(UrlBase, Nodes, [{Bus,Node}|Buses]);
+connect_buses(UrlBase, [Node|Nodes], Buses) ->
+    Url = make_url(UrlBase, Node),
+    {ok,Bus} = enm:bus([{bind,Url},{active,false}]),
+    Urls = [make_url(UrlBase,N) || N <- lists:seq(Node+1,?COUNT)],
+    [{ok,_} = enm:connect(Bus,U) || U <- Urls],
+    connect_buses(UrlBase, Nodes, [{Bus,Node}|Buses]);
+connect_buses(_, [], Buses) ->
+    Buses.
 
-    send_and_receive(Buses, Parent) ->
-        send_and_receive(Buses, Parent, []).
-    send_and_receive([{Bus,Id}|Buses], Parent, Acc) ->
-        Pid = spawn_link(fun() -> bus(Bus, Id, Parent) end),
-        send_and_receive(Buses, Parent, [Pid|Acc]);
-    send_and_receive([], _, Acc) ->
-        Acc.
+send_and_receive(Buses, Parent) ->
+    send_and_receive(Buses, Parent, []).
+send_and_receive([{Bus,Id}|Buses], Parent, Acc) ->
+    Pid = spawn_link(fun() -> bus(Bus, Id, Parent) end),
+    send_and_receive(Buses, Parent, [Pid|Acc]);
+send_and_receive([], _, Acc) ->
+    Acc.
 
-    bus(Bus, Id, Parent) ->
-        Name = "node"++integer_to_list(Id),
-        io:format("node ~w sending \"~s\"~n", [Id, Name]),
-        ok = enm:send(Bus, Name),
-        collect(Bus, Id, Parent).
+bus(Bus, Id, Parent) ->
+    Name = "node"++integer_to_list(Id),
+    io:format("node ~w sending \"~s\"~n", [Id, Name]),
+    ok = enm:send(Bus, Name),
+    collect(Bus, Id, Parent).
 
-    collect(Bus, Id, Parent) ->
-        case enm:recv(Bus, 1000) of
-            {ok,Data} ->
-                io:format("node ~w received \"~s\"~n", [Id, Data]),
-                collect(Bus, Id, Parent);
-            {error,etimedout} ->
-                Parent ! {done, self(), Bus}
-        end.
+collect(Bus, Id, Parent) ->
+    case enm:recv(Bus, 1000) of
+        {ok,Data} ->
+            io:format("node ~w received \"~s\"~n", [Id, Data]),
+            collect(Bus, Id, Parent);
+        {error,etimedout} ->
+            Parent ! {done, self(), Bus}
+    end.
 
-    wait_for_pids([Pid|Pids]) ->
-        receive
-            {done,Pid,Bus} ->
-                enm:close(Bus),
-                wait_for_pids(Pids)
-        end;
-    wait_for_pids([]) ->
-        ok.
+wait_for_pids([Pid|Pids]) ->
+    receive
+        {done,Pid,Bus} ->
+            enm:close(Bus),
+            wait_for_pids(Pids)
+    end;
+wait_for_pids([]) ->
+    ok.
 
-    make_url(Base,N) ->
-        Base++integer_to_list(N).
+make_url(Base,N) ->
+    Base++integer_to_list(N).
+```
 
 In this example consisting of four nodes, each node is connected such that
 it receives one message from each of the other nodes. Each node binds to
@@ -632,23 +642,25 @@ receiving sockets.
 
 #### Bus Results
 
-    1> c("examples/bus", [{o,"examples"}]).
-    {ok,bus}
-    2> bus:start().
-    node 4 sending "node4"
-    node 3 sending "node3"
-    node 2 sending "node2"
-    node 1 sending "node1"
-    node 3 received "node4"
-    node 2 received "node4"
-    node 1 received "node4"
-    node 4 received "node3"
-    node 3 received "node2"
-    node 2 received "node3"
-    node 1 received "node3"
-    node 4 received "node2"
-    node 3 received "node1"
-    node 2 received "node1"
-    node 1 received "node2"
-    node 4 received "node1"
-    ok
+```erlang
+1> c("examples/bus", [{o,"examples"}]).
+{ok,bus}
+2> bus:start().
+node 4 sending "node4"
+node 3 sending "node3"
+node 2 sending "node2"
+node 1 sending "node1"
+node 3 received "node4"
+node 2 received "node4"
+node 1 received "node4"
+node 4 received "node3"
+node 3 received "node2"
+node 2 received "node3"
+node 1 received "node3"
+node 4 received "node2"
+node 3 received "node1"
+node 2 received "node1"
+node 1 received "node2"
+node 4 received "node1"
+ok
+```
