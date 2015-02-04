@@ -119,6 +119,16 @@
                      nnresendivlopt() | nnsndbufopt() | nnrcvbufopt() | nnnodelayopt().
 -type nnopenopts() :: [nnopenopt()].
 
+-export_type([
+              nndata/0,
+              nngetopts/0,
+              nnid/0,
+              nnopenopts/0,
+              nnoptnames/0,
+              nnsetopts/0,
+              nnsocket/0,
+              nnurl/0
+             ]).
 
 -spec start_link() -> {ok, pid()}.
 start_link() ->
