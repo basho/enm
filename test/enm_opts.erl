@@ -195,6 +195,8 @@ mode() ->
 misc() ->
     {ok,Req} = enm:req([{resend_ivl,5000}]),
     ?assertMatch({ok,[{resend_ivl,5000}]}, enm:getopts(Req, [resend_ivl])),
+    ok = enm:setopts(Req, [{ipv4only,false}]),
+    ?assertMatch({ok,[{ipv4only,false}]}, enm:getopts(Req, [ipv4only])),
     ok = enm:setopts(Req, [{sndbuf,345678}]),
     ?assertMatch({ok,[{sndbuf,345678}]}, enm:getopts(Req, [sndbuf])),
     ok = enm:setopts(Req, [{rcvbuf,456789}]),

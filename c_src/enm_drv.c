@@ -361,6 +361,7 @@ enm_create_socket(EnmData* d, EnmArgs* args)
         case ENM_SNDBUF:
         case ENM_RCVBUF:
         case ENM_NODELAY:
+        case ENM_IPV4ONLY:
             if ((res = enm_setopts_priv(d, opt, args)) != 0)
                 return res;
             break;
