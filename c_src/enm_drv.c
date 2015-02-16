@@ -170,7 +170,7 @@ enm_init()
 
     if (getrlimit(RLIMIT_NOFILE, &rl) < 0)
         return -1;
-    enm_sockets = (EnmData**)driver_alloc(rl.rlim_max * sizeof(EnmData*));
+    enm_sockets = (EnmData**)driver_alloc(rl.rlim_cur * sizeof(EnmData*));
     if (enm_sockets == 0)
         return -1;
     return 0;
