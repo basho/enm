@@ -68,6 +68,7 @@
 #define ENM_SNDBUF      18
 #define ENM_RCVBUF      19
 #define ENM_NODELAY     20
+#define ENM_IPV4ONLY    21
 
 #define IDXSHFT(P,I,SH) ((int)(((unsigned char)((P)[I]))<<(SH)))
 #define GETINT16(P) (IDXSHFT(P,0,8) | IDXSHFT(P,1,0))

@@ -36,6 +36,7 @@ static const char* resend_ivl = "resend_ivl";
 static const char* sndbuf = "sndbuf";
 static const char* rcvbuf = "rcvbuf";
 static const char* nodelay = "nodelay";
+static const char* ipv4only = "ipv4only";
 
 static const char*
 enm_optname(int opt)
@@ -63,6 +64,8 @@ enm_optname(int opt)
         return rcvbuf;
     case ENM_NODELAY:
         return nodelay;
+    case ENM_IPV4ONLY:
+        return ipv4only;
     default:
         break;
     }
@@ -177,6 +180,17 @@ enm_getopts(EnmData* d, EnmArgs* args)
         case ENM_NODELAY:
             optlen = sizeof optval;
             rc = nn_getsockopt(d->fd, NN_TCP, NN_TCP_NODELAY,
+                               &optval, &optlen);
+            if (rc < 0) {
+                err = errno;
+                ei_x_free(&xb);
+                return enm_errno_tuple(*args->rbuf, err);
+            }
+            ei_x_encode_boolean(&xb, optval);
+            break;
+        case ENM_IPV4ONLY:
+            optlen = sizeof optval;
+            rc = nn_getsockopt(d->fd, NN_SOL_SOCKET, NN_IPV4ONLY,
                                &optval, &optlen);
             if (rc < 0) {
                 err = errno;
@@ -366,6 +380,17 @@ enm_setopts_priv(EnmData* d, int opt, EnmArgs* args)
         args->buf++;
         args->index++;
         break;
+    case ENM_IPV4ONLY:
+        optval = *args->buf;
+        if (d->fd != -1) {
+            rc = nn_setsockopt(d->fd, NN_SOL_SOCKET, NN_IPV4ONLY,
+                               &optval, sizeof optval);
+            if (rc < 0)
+                return enm_errno_tuple(*args->rbuf, errno);
+        }
+        args->buf++;
+        args->index++;
+        break;
     default:
         return (ErlDrvSSizeT)ERL_DRV_ERROR_BADARG;
     }
@@ -393,6 +418,7 @@ enm_setopts(EnmData* d, EnmArgs* args)
         case ENM_SNDBUF:
         case ENM_RCVBUF:
         case ENM_NODELAY:
+        case ENM_IPV4ONLY:
             if ((res = enm_setopts_priv(d, opt, args)) != 0)
                 return res;
             break;

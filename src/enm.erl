@@ -80,6 +80,7 @@
 -define(ENM_SNDBUF, 18).
 -define(ENM_RCVBUF, 19).
 -define(ENM_NODELAY, 20).
+-define(ENM_IPV4ONLY, 21).
 
 -type nnstate() :: #state{}.
 -type nnsocket() :: port().
@@ -105,13 +106,15 @@
 -type nnsndbufopt() :: {sndbuf, pos_integer()}.
 -type nnrcvbufopt() :: {rcvbuf, pos_integer()}.
 -type nnnodelayopt() :: {nodelay, boolean()}.
+-type nnipv4only() :: {ipv4only, boolean()}.
 -type nngetopt() :: nntypeopt() | nnactiveopt() | nnmodeopt() |
                     nndeadlineopt() | nnresendivlopt() |
                     nnsndbufopt() | nnrcvbufopt() | nnnodelayopt().
 -type nngetopts() :: [nngetopt()].
 -type nnsetopt() :: nnactiveopt() | nnmodeopt() |
                     nndeadlineopt() | nnsubscribeopt() | nnunsubscribeopt() |
-                    nnresendivlopt() | nnsndbufopt() | nnrcvbufopt() | nnnodelayopt().
+                    nnresendivlopt() | nnsndbufopt() | nnrcvbufopt() |
+                    nnnodelayopt() | nnipv4only().
 -type nnsetopts() :: [nnsetopt()].
 -type nnopenopt() :: nnbindopt() | nnconnectopt() | nnrawopt() |
                      nnactiveopt() | nnmodeopt() |
@@ -512,6 +515,8 @@ validate_opt_names([rcvbuf|Opts], Bin) ->
     validate_opt_names(Opts, <<Bin/binary, ?ENM_RCVBUF>>);
 validate_opt_names([nodelay|Opts], Bin) ->
     validate_opt_names(Opts, <<Bin/binary, ?ENM_NODELAY>>);
+validate_opt_names([ipv4only|Opts], Bin) ->
+    validate_opt_names(Opts, <<Bin/binary, ?ENM_IPV4ONLY>>);
 validate_opt_names([Opt|_], _) ->
     error(badarg, [Opt]).
 
@@ -570,6 +575,12 @@ validate_opts([{nodelay,NoDelay}|Opts], Type, Bin) when is_boolean(NoDelay) ->
                false -> ?ENM_FALSE
            end,
     validate_opts(Opts, Type, <<Bin/binary, ?ENM_NODELAY, Bool:8>>);
+validate_opts([{ipv4only, IPv4Only}|Opts], Type, Bin) when is_boolean(IPv4Only) ->
+    Bool = case IPv4Only of
+               true -> ?ENM_TRUE;
+               false -> ?ENM_FALSE
+           end,
+    validate_opts(Opts, Type, <<Bin/binary, ?ENM_IPV4ONLY, Bool:8>>);
 validate_opts(Opts, Type, Bin) ->
     error(badarg, [Opts, Type, Bin]).
 
