@@ -32,7 +32,8 @@ pipeline_test_() ->
      fun enm:start_link/0,
      fun(_) -> enm:stop() end,
      [fun fan_out/0,
-      fun fan_in/0]}.
+      fun fan_in/0,
+      fun no_server/0]}.
 
 fan_out() ->
     {ok, Push1} = enm:push(),
@@ -144,3 +145,26 @@ do_pull([_|Pulls], Data, Acc) ->
             error(pull_timeout)
     end.
 
+no_server() ->
+    %% This test checks that attempts to push to a TCP endpoint that's not
+    %% there fails (github enm issue #7). The test requires the remote
+    %% endpoint to not have anything listening and accepting, so the
+    %% following fold attempts to find such an endpoint. The test won't
+    %% work if something actually answers at the endpoint the fold chooses.
+    Port = (catch lists:foldl(
+                    fun(P, _) ->
+                            case gen_tcp:connect("localhost", P, []) of
+                                {error, econnrefused} ->
+                                    throw(P);
+                                {ok, S} ->
+                                    gen_tcp:close(S),
+                                    P;
+                                _ ->
+                                    P
+                            end
+                    end, ok, lists:seq(47000,60000))),
+    Url = "tcp://localhost:"++integer_to_list(Port),
+    {ok,Push} = enm:push([{connect,Url},list]),
+    enm:send(Push, "sending the first message"),
+    ?assertMatch({error,closed}, enm:send(Push, "sending the second message")),
+    ok.
