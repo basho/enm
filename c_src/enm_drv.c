@@ -232,18 +232,18 @@ enm_stop(ErlDrvData drv_data)
 }
 
 static int
-enm_do_send(EnmData* d, const struct nn_msghdr* msghdr)
+enm_do_send(EnmData* d, const struct nn_msghdr* msghdr, int* err)
 {
-    int rc, err;
+    int rc;
 
     if (msghdr->msg_iovlen == 0)
         return 0;
-    err = 0;
+    *err = 0;
     do {
         rc = nn_sendmsg(d->fd, msghdr, NN_DONTWAIT);
         if (rc < 0) {
-            err = errno;
-            switch (err) {
+            *err = errno;
+            switch (*err) {
             case EINTR:
             case EFSM:
                 /* do nothing */
@@ -254,10 +254,10 @@ enm_do_send(EnmData* d, const struct nn_msghdr* msghdr)
             default:
                 enm_write_select(d, 0);
                 enm_read_select(d, 0);
-                driver_failure(d->port, err);
+                driver_failure(d->port, *err);
             }
         }
-    } while (err == EINTR);
+    } while (*err == EINTR);
     return rc;
 }
 
@@ -280,9 +280,8 @@ enm_outputv(ErlDrvData drv_data, ErlIOVec *ev)
         msghdr.msg_control = 0;
         err = 0;
         do {
-            rc = enm_do_send(d, &msghdr);
+            rc = enm_do_send(d, &msghdr, &err);
             if (rc < 0) {
-                err = errno;
                 if (err == EAGAIN) {
                     d->b.writable = 0;
                     break;
@@ -304,9 +303,8 @@ enm_outputv(ErlDrvData drv_data, ErlIOVec *ev)
         msghdr.msg_control = 0;
         err = 0;
         do {
-            rc = enm_do_send(d, &msghdr);
+            rc = enm_do_send(d, &msghdr, &err);
             if (rc < 0) {
-                err = errno;
                 if (err == EAGAIN) {
                     d->b.writable = 0;
                     break;
@@ -817,7 +815,7 @@ enm_ready_output(ErlDrvData drv_data, ErlDrvEvent event)
     struct nn_msghdr msghdr;
     ErlIOVec ev;
     ErlDrvSizeT total;
-    int rc;
+    int rc, err;
 
     d->b.writable = 1;
     total = driver_peekqv(d->port, &ev);
@@ -827,7 +825,19 @@ enm_ready_output(ErlDrvData drv_data, ErlDrvEvent event)
     msghdr.msg_iov = (struct nn_iovec*)ev.iov;
     msghdr.msg_iovlen = ev.vsize;
     msghdr.msg_control = 0;
-    rc = enm_do_send(d, &msghdr);
+    rc = enm_do_send(d, &msghdr, &err);
+    if (rc < 0 && err == EAGAIN) {
+        /* enm_ready_output (this function) is called when the VM's
+           select/poll/etc. indicates the socket has become writable, but
+           if we get here, it means we tried to write but it failed with
+           EAGAIN, indicating that the socket isn't writable after all. So
+           we assume things are broken in this case, and signal eof. */
+        enm_write_select(d, 0);
+        enm_read_select(d, 0);
+        nn_close(d->fd);
+        d->fd = d->sfd = d->rfd = -1;
+        driver_failure_eof(d->port);
+    }
     if (rc > 0)
         driver_deq(d->port, rc);
     if (rc == total && d->b.writable) {
