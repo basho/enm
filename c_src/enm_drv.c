@@ -630,8 +630,10 @@ enm_control(ErlDrvData drv_data, unsigned int command,
                     enm_errno_str(err, errstr);
                     ei_x_encode_atom(&xb, errstr);
                 }
-            } else
+            } else {
+                d->ready_output_spins = 0;
                 break;
+            }
         }
         bin = 0;
         if (xb.index == 0) {
@@ -757,6 +759,7 @@ enm_ready_input(ErlDrvData drv_data, ErlDrvEvent event)
             d->fd = -1;
         }
     } else {
+        d->ready_output_spins = 0;
         if (d->waiting_recvs != 0) {
             EnmRecv* rcv = d->waiting_recvs;
             int index = 0;
@@ -828,15 +831,27 @@ enm_ready_output(ErlDrvData drv_data, ErlDrvEvent event)
     rc = enm_do_send(d, &msghdr, &err);
     if (rc < 0 && err == EAGAIN) {
         /* enm_ready_output (this function) is called when the VM's
-           select/poll/etc. indicates the socket has become writable, but
-           if we get here, it means we tried to write but it failed with
-           EAGAIN, indicating that the socket isn't writable after all. So
-           we assume things are broken in this case, and signal eof. */
-        enm_write_select(d, 0);
-        enm_read_select(d, 0);
-        nn_close(d->fd);
-        d->fd = d->sfd = d->rfd = -1;
-        driver_failure_eof(d->port);
+         * select/poll/etc. indicates the socket has become writable, but
+         * if we get here, it means we tried to write but it failed with
+         * EAGAIN, indicating that the socket isn't writable after all. So
+         * we assume things are broken in this case, mark the port as busy,
+         * and start counting how many times we get called again in this
+         * same state, storing the count in d->ready_output_spins. If that
+         * count reaches the (admittedly arbitrary) count of 64, assume the
+         * socket is inoperable and close it.
+         */
+        rc = 0;
+        if (!d->b.busy) {
+            d->b.busy = 1;
+            set_busy_port(d->port, d->b.busy);
+            d->ready_output_spins = 0;
+        } else if (++d->ready_output_spins == 64) {
+            enm_write_select(d, 0);
+            enm_read_select(d, 0);
+            nn_close(d->fd);
+            d->fd = d->sfd = d->rfd = -1;
+            driver_failure_eof(d->port);
+        }
     }
     if (rc > 0)
         driver_deq(d->port, rc);
@@ -844,6 +859,7 @@ enm_ready_output(ErlDrvData drv_data, ErlDrvEvent event)
         if (d->b.busy) {
             d->b.busy = 0;
             set_busy_port(d->port, d->b.busy);
+            d->ready_output_spins = 0;
         }
         enm_write_select(d, 0);
     }

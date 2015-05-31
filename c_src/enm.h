@@ -86,6 +86,7 @@ typedef struct {
     ErlDrvPort port;
     EnmRecv* waiting_recvs;
     size_t busy_limit;
+    size_t ready_output_spins;
     int protocol;
     int fd;
     int sfd;
