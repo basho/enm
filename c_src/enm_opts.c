@@ -37,6 +37,7 @@ static const char* sndbuf = "sndbuf";
 static const char* rcvbuf = "rcvbuf";
 static const char* nodelay = "nodelay";
 static const char* ipv4only = "ipv4only";
+static const char* send_timeout = "send_timeout";
 
 static const char*
 enm_optname(int opt)
@@ -66,6 +67,8 @@ enm_optname(int opt)
         return nodelay;
     case ENM_IPV4ONLY:
         return ipv4only;
+    case ENM_SEND_TIMEOUT:
+        return send_timeout;
     default:
         break;
     }
@@ -198,6 +201,13 @@ enm_getopts(EnmData* d, EnmArgs* args)
                 return enm_errno_tuple(*args->rbuf, err);
             }
             ei_x_encode_boolean(&xb, optval);
+            break;
+        case ENM_SEND_TIMEOUT:
+            if (d->protocol == NN_PULL || d->protocol == NN_SUB) {
+                ei_x_free(&xb);
+                return enm_errno_tuple(*args->rbuf, EINVAL);
+            }
+            ei_x_encode_ulong(&xb, d->send_timeout);
             break;
         default:
             ei_x_free(&xb);
@@ -391,6 +401,16 @@ enm_setopts_priv(EnmData* d, int opt, EnmArgs* args)
         args->buf++;
         args->index++;
         break;
+    case ENM_SEND_TIMEOUT:
+        if (d->protocol == NN_PULL || d->protocol == NN_SUB)
+            return enm_errno_tuple(*args->rbuf, EINVAL);
+        args->send_timeout = (int)GETINT32(args->buf);
+        if (args->send_timeout < 0)
+            return (ErlDrvSSizeT)ERL_DRV_ERROR_BADARG;
+        d->send_timeout = args->send_timeout;
+        args->buf += 4;
+        args->index += 4;
+        break;
     default:
         return (ErlDrvSSizeT)ERL_DRV_ERROR_BADARG;
     }
@@ -419,6 +439,7 @@ enm_setopts(EnmData* d, EnmArgs* args)
         case ENM_RCVBUF:
         case ENM_NODELAY:
         case ENM_IPV4ONLY:
+        case ENM_SEND_TIMEOUT:
             if ((res = enm_setopts_priv(d, opt, args)) != 0)
                 return res;
             break;

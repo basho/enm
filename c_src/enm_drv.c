@@ -142,8 +142,10 @@ enm_add_waiter(EnmData* d, erlang_ref* ref)
     EnmRecv *rcv, *cur;
 
     rcv = driver_alloc(sizeof(EnmRecv));
-    if (rcv == 0)
+    if (rcv == 0) {
         driver_failure(d->port, ENOMEM);
+        return;
+    }
     memcpy(&rcv->ref, ref, sizeof *ref);
     rcv->rcvr = driver_caller(d->port);
     rcv->next = 0;
@@ -262,6 +264,18 @@ enm_do_send(EnmData* d, const struct nn_msghdr* msghdr, int* err)
 }
 
 static void
+enm_timeout(ErlDrvData drv_data)
+{
+    EnmData* d = (EnmData*)drv_data;
+    assert(d->b.timer_on);
+    enm_write_select(d, 0);
+    enm_read_select(d, 0);
+    nn_close(d->fd);
+    d->fd = d->sfd = d->rfd = -1;
+    driver_failure_eof(d->port);
+}
+
+static void
 enm_outputv(ErlDrvData drv_data, ErlIOVec *ev)
 {
     EnmData* d = (EnmData*)drv_data;
@@ -283,10 +297,33 @@ enm_outputv(ErlDrvData drv_data, ErlIOVec *ev)
             rc = enm_do_send(d, &msghdr, &err);
             if (rc < 0) {
                 if (err == EAGAIN) {
+                    if (d->send_timeout) {
+                        unsigned long t;
+                        if (d->b.timer_on) {
+                            driver_read_timer(d->port, &t);
+                            if (t == 0) {
+                                enm_write_select(d, 0);
+                                enm_read_select(d, 0);
+                                nn_close(d->fd);
+                                d->fd = d->sfd = d->rfd = -1;
+                                driver_failure_eof(d->port);
+                                return;
+                            }
+                        } else {
+                            t = (unsigned long)d->send_timeout;
+                            driver_set_timer(d->port, t);
+                            d->b.timer_on = 1;
+                        }
+                    }
                     d->b.writable = 0;
                     break;
-                } else if (err != EINTR)
+                } else if (err != EINTR) {
                     driver_failure(d->port, err);
+                    return;
+                }
+            } else if (d->b.timer_on) {
+                driver_cancel_timer(d->port);
+                d->b.timer_on = 0;
             }
         } while (err == EINTR);
     }
@@ -306,10 +343,33 @@ enm_outputv(ErlDrvData drv_data, ErlIOVec *ev)
             rc = enm_do_send(d, &msghdr, &err);
             if (rc < 0) {
                 if (err == EAGAIN) {
+                    if (d->send_timeout) {
+                        unsigned long t;
+                        if (d->b.timer_on) {
+                            driver_read_timer(d->port, &t);
+                            if (t == 0) {
+                                enm_write_select(d, 0);
+                                enm_read_select(d, 0);
+                                nn_close(d->fd);
+                                d->fd = d->sfd = d->rfd = -1;
+                                driver_failure_eof(d->port);
+                                return;
+                            }
+                        } else {
+                            t = (unsigned long)d->send_timeout;
+                            driver_set_timer(d->port, t);
+                            d->b.timer_on = 1;
+                        }
+                    }
                     d->b.writable = 0;
                     break;
-                } else if (err != EINTR)
+                } else if (err != EINTR) {
                     driver_failure(d->port, err);
+                    return;
+                }
+            } else if (d->b.timer_on) {
+                driver_cancel_timer(d->port);
+                d->b.timer_on = 0;
             }
         } while (err == EINTR);
     }
@@ -360,6 +420,7 @@ enm_create_socket(EnmData* d, EnmArgs* args)
         case ENM_RCVBUF:
         case ENM_NODELAY:
         case ENM_IPV4ONLY:
+        case ENM_SEND_TIMEOUT:
             if ((res = enm_setopts_priv(d, opt, args)) != 0)
                 return res;
             break;
@@ -537,6 +598,10 @@ enm_control(ErlDrvData drv_data, unsigned int command,
         qsize = driver_sizeq(d->port);
         if (qsize > 0)
             driver_deq(d->port, qsize);
+        if (d->b.timer_on) {
+            driver_cancel_timer(d->port);
+            d->b.timer_on = 0;
+        }
         result = 0;
         err = 0;
         if (d->fd != -1) {
@@ -630,10 +695,8 @@ enm_control(ErlDrvData drv_data, unsigned int command,
                     enm_errno_str(err, errstr);
                     ei_x_encode_atom(&xb, errstr);
                 }
-            } else {
-                d->ready_output_spins = 0;
+            } else
                 break;
-            }
         }
         bin = 0;
         if (xb.index == 0) {
@@ -759,7 +822,6 @@ enm_ready_input(ErlDrvData drv_data, ErlDrvEvent event)
             d->fd = -1;
         }
     } else {
-        d->ready_output_spins = 0;
         if (d->waiting_recvs != 0) {
             EnmRecv* rcv = d->waiting_recvs;
             int index = 0;
@@ -829,39 +891,46 @@ enm_ready_output(ErlDrvData drv_data, ErlDrvEvent event)
     msghdr.msg_iovlen = ev.vsize;
     msghdr.msg_control = 0;
     rc = enm_do_send(d, &msghdr, &err);
-    if (rc < 0 && err == EAGAIN) {
-        /* enm_ready_output (this function) is called when the VM's
-         * select/poll/etc. indicates the socket has become writable, but
-         * if we get here, it means we tried to write but it failed with
-         * EAGAIN, indicating that the socket isn't writable after all. So
-         * we assume things are broken in this case, mark the port as busy,
-         * and start counting how many times we get called again in this
-         * same state, storing the count in d->ready_output_spins. If that
-         * count reaches the (admittedly arbitrary) count of 64, assume the
-         * socket is inoperable and close it.
-         */
-        rc = 0;
-        if (!d->b.busy) {
-            d->b.busy = 1;
-            set_busy_port(d->port, d->b.busy);
-            d->ready_output_spins = 0;
-        } else if (++d->ready_output_spins == 64) {
+    if (rc < 0) {
+        if (err == EAGAIN) {
+            if (d->send_timeout) {
+                unsigned long t;
+                if (d->b.timer_on) {
+                    driver_read_timer(d->port, &t);
+                    if (t == 0) {
+                        enm_write_select(d, 0);
+                        enm_read_select(d, 0);
+                        nn_close(d->fd);
+                        d->fd = d->sfd = d->rfd = -1;
+                        driver_failure_eof(d->port);
+                        return;
+                    }
+                } else {
+                    t = (unsigned long)d->send_timeout;
+                    driver_set_timer(d->port, t);
+                    d->b.timer_on = 1;
+                }
+            }
+            d->b.writable = 0;
+        } else {
             enm_write_select(d, 0);
             enm_read_select(d, 0);
             nn_close(d->fd);
             d->fd = d->sfd = d->rfd = -1;
             driver_failure_eof(d->port);
         }
-    }
-    if (rc > 0)
+    } else {
         driver_deq(d->port, rc);
+        if (d->b.timer_on) {
+            driver_cancel_timer(d->port);
+            d->b.timer_on = 0;
+        }
+    }
     if (rc == total && d->b.writable) {
         if (d->b.busy) {
             d->b.busy = 0;
             set_busy_port(d->port, d->b.busy);
-            d->ready_output_spins = 0;
         }
-        enm_write_select(d, 0);
     }
 }
 
@@ -903,7 +972,7 @@ static ErlDrvEntry drv_entry = {
     enm_finish,
     0,
     enm_control,
-    0,
+    enm_timeout,
     enm_outputv,
     0,
     0,

@@ -205,5 +205,7 @@ misc() ->
     ?assertMatch({error,einval}, enm:sub([{sndbuf,12345678}])),
     ?assertMatch({error,einval}, enm:push([{rcvbuf,12345678}])),
     ?assertMatch({error,einval}, enm:pub([{rcvbuf,12345678}])),
+    ok = enm:setopts(Req, [{send_timeout,500}]),
+    ?assertMatch({ok,[{send_timeout,500}]}, enm:getopts(Req, [send_timeout])),
     ok = enm:close(Req),
     ok.

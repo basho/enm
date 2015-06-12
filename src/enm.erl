@@ -81,6 +81,7 @@
 -define(ENM_RCVBUF, 19).
 -define(ENM_NODELAY, 20).
 -define(ENM_IPV4ONLY, 21).
+-define(ENM_SEND_TIMEOUT, 22).
 
 -type nnstate() :: #state{}.
 -type nnsocket() :: port().
@@ -107,17 +108,18 @@
 -type nnrcvbufopt() :: {rcvbuf, pos_integer()}.
 -type nnnodelayopt() :: {nodelay, boolean()}.
 -type nnipv4only() :: {ipv4only, boolean()}.
+-type nnsendtimeout() :: {send_timeout, pos_integer() | infinity}.
 -type nngetopt() :: nntypeopt() | nnactiveopt() | nnmodeopt() |
-                    nndeadlineopt() | nnresendivlopt() |
+                    nndeadlineopt() | nnresendivlopt() | nnsendtimeout() |
                     nnsndbufopt() | nnrcvbufopt() | nnnodelayopt().
 -type nngetopts() :: [nngetopt()].
 -type nnsetopt() :: nnactiveopt() | nnmodeopt() |
                     nndeadlineopt() | nnsubscribeopt() | nnunsubscribeopt() |
                     nnresendivlopt() | nnsndbufopt() | nnrcvbufopt() |
-                    nnnodelayopt() | nnipv4only().
+                    nnnodelayopt() | nnipv4only() | nnsendtimeout().
 -type nnsetopts() :: [nnsetopt()].
 -type nnopenopt() :: nnbindopt() | nnconnectopt() | nnrawopt() |
-                     nnactiveopt() | nnmodeopt() |
+                     nnactiveopt() | nnmodeopt() | nnsendtimeout() |
                      nndeadlineopt() | nnsubscribeopt() | nnunsubscribeopt() |
                      nnresendivlopt() | nnsndbufopt() | nnrcvbufopt() | nnnodelayopt().
 -type nnopenopts() :: [nnopenopt()].
@@ -517,6 +519,8 @@ validate_opt_names([nodelay|Opts], Bin) ->
     validate_opt_names(Opts, <<Bin/binary, ?ENM_NODELAY>>);
 validate_opt_names([ipv4only|Opts], Bin) ->
     validate_opt_names(Opts, <<Bin/binary, ?ENM_IPV4ONLY>>);
+validate_opt_names([send_timeout|Opts], Bin) ->
+    validate_opt_names(Opts, <<Bin/binary, ?ENM_SEND_TIMEOUT>>);
 validate_opt_names([Opt|_], _) ->
     error(badarg, [Opt]).
 
@@ -561,6 +565,12 @@ validate_opts([{SubOrUnsub,Topic}|Opts]=AllOpts, nnsub, Bin)
     end;
 validate_opts([{resend_ivl,RI}|Opts], nnreq, Bin) when is_integer(RI), RI > 0 ->
     validate_opts(Opts, nnreq, <<Bin/binary, ?ENM_RESEND_IVL, RI:32/big>>);
+validate_opts([{send_timeout,_}|_], Type, _Bin) when Type == nnpull; Type == nnsub ->
+    {error,einval};
+validate_opts([{send_timeout,infinite}|Opts], Type, Bin) ->
+    validate_opts(Opts, Type, <<Bin/binary, ?ENM_SEND_TIMEOUT, 0:32/big>>);
+validate_opts([{send_timeout,ST}|Opts], Type, Bin) when is_integer(ST), ST > 0 ->
+    validate_opts(Opts, Type, <<Bin/binary, ?ENM_SEND_TIMEOUT, ST:32/big>>);
 validate_opts([{sndbuf,_}|_], Type, _Bin) when Type == nnpull; Type == nnsub ->
     {error,einval};
 validate_opts([{sndbuf,Sndbuf}|Opts], Type, Bin) when is_integer(Sndbuf) ->

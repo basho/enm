@@ -164,7 +164,7 @@ no_server() ->
                             end
                     end, ok, lists:seq(47000,60000))),
     Url = "tcp://localhost:"++integer_to_list(Port),
-    {ok,Push} = enm:push([{connect,Url},list]),
+    {ok,Push} = enm:push([{connect,Url},list,{send_timeout,1000}]),
     enm:send(Push, "sending the first message"),
     ?assertMatch({error,closed}, enm:send(Push, "sending the second message")),
     ok.

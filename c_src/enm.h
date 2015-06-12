@@ -53,26 +53,27 @@
 #define ENM_RESP        28
 #define ENM_PAIR        29
 
-#define ENM_FALSE       0
-#define ENM_TRUE        1
-#define ENM_ONCE        2
-#define ENM_N           3
-#define ENM_ACTIVE      10
-#define ENM_TYPE        11
-#define ENM_RAW         12
-#define ENM_DEADLINE    13
-#define ENM_SUBSCRIBE   14
-#define ENM_UNSUBSCRIBE 15
-#define ENM_RESEND_IVL  16
-#define ENM_BINARY      17
-#define ENM_SNDBUF      18
-#define ENM_RCVBUF      19
-#define ENM_NODELAY     20
-#define ENM_IPV4ONLY    21
+#define ENM_FALSE        0
+#define ENM_TRUE         1
+#define ENM_ONCE         2
+#define ENM_N            3
+#define ENM_ACTIVE       10
+#define ENM_TYPE         11
+#define ENM_RAW          12
+#define ENM_DEADLINE     13
+#define ENM_SUBSCRIBE    14
+#define ENM_UNSUBSCRIBE  15
+#define ENM_RESEND_IVL   16
+#define ENM_BINARY       17
+#define ENM_SNDBUF       18
+#define ENM_RCVBUF       19
+#define ENM_NODELAY      20
+#define ENM_IPV4ONLY     21
+#define ENM_SEND_TIMEOUT 22
 
 #define IDXSHFT(P,I,SH) ((int)(((unsigned char)((P)[I]))<<(SH)))
-#define GETINT16(P) (IDXSHFT(P,0,8) | IDXSHFT(P,1,0))
-#define GETINT32(P) (IDXSHFT(P,0,24) | IDXSHFT(P,1,16) | \
+#define GETINT16(P)     (IDXSHFT(P,0,8) | IDXSHFT(P,1,0))
+#define GETINT32(P)     (IDXSHFT(P,0,24) | IDXSHFT(P,1,16) | \
                      IDXSHFT(P,2,8) | IDXSHFT(P,3,0))
 
 typedef struct EnmRecv {
@@ -86,11 +87,11 @@ typedef struct {
     ErlDrvPort port;
     EnmRecv* waiting_recvs;
     size_t busy_limit;
-    size_t ready_output_spins;
     int protocol;
     int fd;
     int sfd;
     int rfd;
+    int send_timeout;
     short n_count;
     struct {
         unsigned active:     2;
@@ -100,6 +101,7 @@ typedef struct {
         unsigned write_poll: 1;
         unsigned read_poll:  1;
         unsigned busy:       1;
+        unsigned timer_on:   1;
     } b;
 } EnmData;
 
@@ -116,6 +118,7 @@ typedef struct {
     int resend_ivl;
     int sndbuf;
     int rcvbuf;
+    int send_timeout;
     struct {
         unsigned topic_seen: 1;
     } b;
