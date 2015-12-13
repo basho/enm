@@ -142,8 +142,10 @@ enm_add_waiter(EnmData* d, erlang_ref* ref)
     EnmRecv *rcv, *cur;
 
     rcv = driver_alloc(sizeof(EnmRecv));
-    if (rcv == 0)
-        driver_failure(d->port, ENOMEM);
+    if (rcv == 0) {
+        driver_failure_posix(d->port, ENOMEM);
+        return;
+    }
     memcpy(&rcv->ref, ref, sizeof *ref);
     rcv->rcvr = driver_caller(d->port);
     rcv->next = 0;
@@ -285,8 +287,21 @@ enm_outputv(ErlDrvData drv_data, ErlIOVec *ev)
                 if (err == EAGAIN) {
                     d->b.writable = 0;
                     break;
-                } else if (err != EINTR)
-                    driver_failure(d->port, err);
+                } else if (err != EINTR) {
+                    char errstr[32];
+                    switch (enm_errno_str(err, errstr)) {
+                    case ENM_NANOMSG_ERROR:
+                        driver_failure_atom(d->port, errstr);
+                        break;
+                    case ENM_POSIX_ERROR:
+                        driver_failure_posix(d->port, err);
+                        break;
+                    case ENM_UNKNOWN_ERROR:
+                        driver_failure(d->port, err);
+                        break;
+                    }
+                    return;
+                }
             }
         } while (err == EINTR);
     }
@@ -308,8 +323,21 @@ enm_outputv(ErlDrvData drv_data, ErlIOVec *ev)
                 if (err == EAGAIN) {
                     d->b.writable = 0;
                     break;
-                } else if (err != EINTR)
-                    driver_failure(d->port, err);
+                } else if (err != EINTR) {
+                    char errstr[32];
+                    switch (enm_errno_str(err, errstr)) {
+                    case ENM_NANOMSG_ERROR:
+                        driver_failure_atom(d->port, errstr);
+                        break;
+                    case ENM_POSIX_ERROR:
+                        driver_failure_posix(d->port, err);
+                        break;
+                    case ENM_UNKNOWN_ERROR:
+                        driver_failure(d->port, err);
+                        break;
+                    }
+                    return;
+                }
             }
         } while (err == EINTR);
     }
@@ -627,8 +655,10 @@ enm_control(ErlDrvData drv_data, unsigned int command,
                     ei_x_encode_ref(&xb, &ref);
                     ei_x_encode_tuple_header(&xb, 2);
                     ei_x_encode_atom(&xb, "error");
-                    enm_errno_str(err, errstr);
-                    ei_x_encode_atom(&xb, errstr);
+                    if (enm_errno_str(err, errstr) != ENM_UNKNOWN_ERROR)
+                        ei_x_encode_atom(&xb, errstr);
+                    else
+                        ei_x_encode_long(&xb, err);
                 }
             } else
                 break;
@@ -837,6 +867,7 @@ enm_ready_output(ErlDrvData drv_data, ErlDrvEvent event)
         nn_close(d->fd);
         d->fd = d->sfd = d->rfd = -1;
         driver_failure_eof(d->port);
+        return;
     }
     if (rc > 0)
         driver_deq(d->port, rc);
