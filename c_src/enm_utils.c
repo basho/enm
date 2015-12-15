@@ -33,25 +33,31 @@ enm_ok(char* buf)
     return index;
 }
 
-void
+EnmErrorType
 enm_errno_str(int err, char* errstr)
 {
+    EnmErrorType errtype = ENM_UNKNOWN_ERROR;
+    errstr[0] = '\0';
     strcpy(errstr, erl_errno_id(err));
-    if (strcmp(errstr, "unknown") == 0) {
+    if (strcmp(errstr, "unknown") != 0)
+        return ENM_POSIX_ERROR;
+    else {
         switch (err) {
         case EFSM:
             strcpy(errstr, "efsm");
+            errtype = ENM_NANOMSG_ERROR;
             break;
         case ETERM:
             strcpy(errstr, "eterm");
+            errtype = ENM_NANOMSG_ERROR;
             break;
         default:
             /* default in case nanomsg adds new errno values
              * not accounted for here */
-            strcpy(errstr, "enanomsg");
             break;
         }
     }
+    return errtype;
 }
 
 ErlDrvSSizeT

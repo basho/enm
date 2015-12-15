@@ -120,13 +120,19 @@ typedef struct {
     } b;
 }  EnmArgs;
 
+typedef enum {
+    ENM_NANOMSG_ERROR,
+    ENM_POSIX_ERROR,
+    ENM_UNKNOWN_ERROR
+} EnmErrorType;
+
 extern int enm_write_select(EnmData* d, int start);
 extern int enm_read_select(EnmData* d, int start);
 extern ErlDrvSSizeT enm_getopts(EnmData* d, EnmArgs* args);
 extern ErlDrvSSizeT enm_setopts_priv(EnmData* d, int opt, EnmArgs* args);
 extern ErlDrvSSizeT enm_setopts(EnmData* d, EnmArgs* args);
 extern ErlDrvSSizeT enm_ok(char* buf);
-extern void enm_errno_str(int err, char* errstr);
+extern EnmErrorType enm_errno_str(int err, char* errstr);
 extern ErlDrvSSizeT enm_errno_tuple(char* buf, int err);
 extern ErlDrvTermData enm_errno_atom(int err);
 extern const char* enm_protocol_name(int protocol);
