@@ -189,6 +189,18 @@ can also be read from `enm` sockets. `enm` supports the following options:
   specifically a `push` or `pub` socket, results in a `badarg` exception.
 * `nodelay`: if true, set the `TCP_NODELAY` option on TCP sockets, or if
   false, clear it.
+* `reconnect_ivl`: set the reconnect interval to specify how long, in
+  milliseconds, to wait before attempting to reconnect a broken socket
+  connection. The supplied value must be greater than 0, otherwise a
+  `badarg` exception results. The default is 100.
+* `reconnect_ivl_max`: set the maximum reconnect interval in
+  milliseconds. If this value is greater than the default of 0, socket
+  reconnection attempts will use exponential backoff starting with the
+  socket's `reconnect_ivl` value and doubling it on each reconnection
+  attempt, but will ensure the backoff value never exceeds the specified
+  `reconnect_ivl_max` value. With the default value of 0, no exponential
+  backoff is used, and only the `reconnect_ivl` setting controls
+  reconnection wait time.
 
 Currently, most but not all nanomsg socket options are implemented. Please
 file an issue or submit a pull request if an option you need is missing.

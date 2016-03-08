@@ -37,6 +37,8 @@ static const char* sndbuf = "sndbuf";
 static const char* rcvbuf = "rcvbuf";
 static const char* nodelay = "nodelay";
 static const char* ipv4only = "ipv4only";
+static const char* reconnect_ivl = "reconnect_ivl";
+static const char* reconnect_ivl_max = "reconnect_ivl_max";
 
 static const char*
 enm_optname(int opt)
@@ -66,6 +68,10 @@ enm_optname(int opt)
         return nodelay;
     case ENM_IPV4ONLY:
         return ipv4only;
+    case ENM_RECONNECT_IVL:
+        return reconnect_ivl;
+    case ENM_RECONNECT_IVL_MAX:
+        return reconnect_ivl_max;
     default:
         break;
     }
@@ -198,6 +204,28 @@ enm_getopts(EnmData* d, EnmArgs* args)
                 return enm_errno_tuple(*args->rbuf, err);
             }
             ei_x_encode_boolean(&xb, optval);
+            break;
+        case ENM_RECONNECT_IVL:
+            optlen = sizeof args->reconnect_ivl;
+            rc = nn_getsockopt(d->fd, NN_SOL_SOCKET, NN_RECONNECT_IVL,
+                               &args->reconnect_ivl, &optlen);
+            if (rc < 0) {
+                err = errno;
+                ei_x_free(&xb);
+                return enm_errno_tuple(*args->rbuf, err);
+            }
+            ei_x_encode_ulong(&xb, args->reconnect_ivl);
+            break;
+        case ENM_RECONNECT_IVL_MAX:
+            optlen = sizeof args->reconnect_ivl_max;
+            rc = nn_getsockopt(d->fd, NN_SOL_SOCKET, NN_RECONNECT_IVL_MAX,
+                               &args->reconnect_ivl_max, &optlen);
+            if (rc < 0) {
+                err = errno;
+                ei_x_free(&xb);
+                return enm_errno_tuple(*args->rbuf, err);
+            }
+            ei_x_encode_ulong(&xb, args->reconnect_ivl_max);
             break;
         default:
             ei_x_free(&xb);
@@ -391,6 +419,34 @@ enm_setopts_priv(EnmData* d, int opt, EnmArgs* args)
         args->buf++;
         args->index++;
         break;
+    case ENM_RECONNECT_IVL:
+        args->reconnect_ivl = (int)GETINT32(args->buf);
+        if (args->reconnect_ivl <= 0)
+            return (ErlDrvSSizeT)ERL_DRV_ERROR_BADARG;
+        if (d->fd != -1) {
+            rc = nn_setsockopt(d->fd, NN_SOL_SOCKET, NN_RECONNECT_IVL,
+                               &args->reconnect_ivl,
+                               sizeof args->reconnect_ivl);
+            if (rc < 0)
+                return enm_errno_tuple(*args->rbuf, errno);
+        }
+        args->buf += 4;
+        args->index += 4;
+        break;
+    case ENM_RECONNECT_IVL_MAX:
+        args->reconnect_ivl_max = (int)GETINT32(args->buf);
+        if (args->reconnect_ivl_max < 0)
+            return (ErlDrvSSizeT)ERL_DRV_ERROR_BADARG;
+        if (d->fd != -1) {
+            rc = nn_setsockopt(d->fd, NN_SOL_SOCKET, NN_RECONNECT_IVL_MAX,
+                               &args->reconnect_ivl_max,
+                               sizeof args->reconnect_ivl_max);
+            if (rc < 0)
+                return enm_errno_tuple(*args->rbuf, errno);
+        }
+        args->buf += 4;
+        args->index += 4;
+        break;
     default:
         return (ErlDrvSSizeT)ERL_DRV_ERROR_BADARG;
     }
@@ -419,6 +475,8 @@ enm_setopts(EnmData* d, EnmArgs* args)
         case ENM_RCVBUF:
         case ENM_NODELAY:
         case ENM_IPV4ONLY:
+        case ENM_RECONNECT_IVL:
+        case ENM_RECONNECT_IVL_MAX:
             if ((res = enm_setopts_priv(d, opt, args)) != 0)
                 return res;
             break;
