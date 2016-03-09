@@ -2,7 +2,7 @@
 %%
 %% enm: Erlang driver-based binding for nanomsg
 %%
-%% Copyright (c) 2014 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2014-2016 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -81,6 +81,8 @@
 -define(ENM_RCVBUF, 19).
 -define(ENM_NODELAY, 20).
 -define(ENM_IPV4ONLY, 21).
+-define(ENM_RECONNECT_IVL, 22).
+-define(ENM_RECONNECT_IVL_MAX, 23).
 
 -type nnstate() :: #state{}.
 -type nnsocket() :: port().
@@ -89,7 +91,8 @@
                  binary() | string().
 -type nnid() :: integer().
 -type nnoptname() :: type | active | raw | mode |
-                     deadline | subscribe | unsubscribe | resend_ivl | sndbuf | rcvbuf.
+                     deadline | subscribe | unsubscribe | resend_ivl |
+                     sndbuf | rcvbuf | reconnect_ivl | reconnect_ivl_max.
 -type nnoptnames() :: [nnoptname()].
 -type nntypename() :: nnreq | nnrep | nnbus | nnpub | nnsub | nnpush | nnpull |
                       nnsurveyor | nnrespondent | nnpair.
@@ -107,6 +110,8 @@
 -type nnrcvbufopt() :: {rcvbuf, pos_integer()}.
 -type nnnodelayopt() :: {nodelay, boolean()}.
 -type nnipv4only() :: {ipv4only, boolean()}.
+-type nnreconnectivl() :: {reconnect_ivl, pos_integer()}.
+-type nnreconnectivlmax() :: {reconnect_ivl_max, non_neg_integer()}.
 -type nngetopt() :: nntypeopt() | nnactiveopt() | nnmodeopt() |
                     nndeadlineopt() | nnresendivlopt() |
                     nnsndbufopt() | nnrcvbufopt() | nnnodelayopt().
@@ -114,12 +119,14 @@
 -type nnsetopt() :: nnactiveopt() | nnmodeopt() |
                     nndeadlineopt() | nnsubscribeopt() | nnunsubscribeopt() |
                     nnresendivlopt() | nnsndbufopt() | nnrcvbufopt() |
-                    nnnodelayopt() | nnipv4only().
+                    nnnodelayopt() | nnipv4only() |
+                    nnreconnectivl() | nnreconnectivlmax().
 -type nnsetopts() :: [nnsetopt()].
 -type nnopenopt() :: nnbindopt() | nnconnectopt() | nnrawopt() |
                      nnactiveopt() | nnmodeopt() |
                      nndeadlineopt() | nnsubscribeopt() | nnunsubscribeopt() |
-                     nnresendivlopt() | nnsndbufopt() | nnrcvbufopt() | nnnodelayopt().
+                     nnresendivlopt() | nnsndbufopt() | nnrcvbufopt() |
+                     nnnodelayopt() | nnreconnectivl() | nnreconnectivlmax().
 -type nnopenopts() :: [nnopenopt()].
 
 -export_type([
@@ -517,6 +524,10 @@ validate_opt_names([nodelay|Opts], Bin) ->
     validate_opt_names(Opts, <<Bin/binary, ?ENM_NODELAY>>);
 validate_opt_names([ipv4only|Opts], Bin) ->
     validate_opt_names(Opts, <<Bin/binary, ?ENM_IPV4ONLY>>);
+validate_opt_names([reconnect_ivl|Opts], Bin) ->
+    validate_opt_names(Opts, <<Bin/binary, ?ENM_RECONNECT_IVL>>);
+validate_opt_names([reconnect_ivl_max|Opts], Bin) ->
+    validate_opt_names(Opts, <<Bin/binary, ?ENM_RECONNECT_IVL_MAX>>);
 validate_opt_names([Opt|_], _) ->
     error(badarg, [Opt]).
 
@@ -581,6 +592,12 @@ validate_opts([{ipv4only, IPv4Only}|Opts], Type, Bin) when is_boolean(IPv4Only) 
                false -> ?ENM_FALSE
            end,
     validate_opts(Opts, Type, <<Bin/binary, ?ENM_IPV4ONLY, Bool:8>>);
+validate_opts([{reconnect_ivl,RCI}|Opts], Type, Bin)
+  when is_integer(RCI), RCI > 0 ->
+    validate_opts(Opts, Type, <<Bin/binary, ?ENM_RECONNECT_IVL, RCI:32/big>>);
+validate_opts([{reconnect_ivl_max,RCI}|Opts], Type, Bin)
+  when is_integer(RCI), RCI >= 0 ->
+    validate_opts(Opts, Type, <<Bin/binary, ?ENM_RECONNECT_IVL_MAX, RCI:32/big>>);
 validate_opts(Opts, Type, Bin) ->
     error(badarg, [Opts, Type, Bin]).
 

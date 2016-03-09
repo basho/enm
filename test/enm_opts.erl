@@ -2,7 +2,7 @@
 %%
 %% enm_opts: option tests for enm
 %%
-%% Copyright (c) 2014 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2014-2016 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -201,6 +201,12 @@ misc() ->
     ?assertMatch({ok,[{sndbuf,345678}]}, enm:getopts(Req, [sndbuf])),
     ok = enm:setopts(Req, [{rcvbuf,456789}]),
     ?assertMatch({ok,[{rcvbuf,456789}]}, enm:getopts(Req, [rcvbuf])),
+    ok = enm:setopts(Req, [{reconnect_ivl,2000}]),
+    ?assertMatch({ok,[{reconnect_ivl,2000}]},
+                 enm:getopts(Req, [reconnect_ivl])),
+    ok = enm:setopts(Req, [{reconnect_ivl_max,5000}]),
+    ?assertMatch({ok,[{reconnect_ivl_max,5000}]},
+                 enm:getopts(Req, [reconnect_ivl_max])),
     ?assertMatch({error,einval}, enm:pull([{sndbuf,12345678}])),
     ?assertMatch({error,einval}, enm:sub([{sndbuf,12345678}])),
     ?assertMatch({error,einval}, enm:push([{rcvbuf,12345678}])),

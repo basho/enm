@@ -5,7 +5,7 @@
 //
 // enm.h: common definitions for nanomsg Erlang language binding
 //
-// Copyright (c) 2014 Basho Technologies, Inc. All Rights Reserved.
+// Copyright (c) 2014-2016 Basho Technologies, Inc. All Rights Reserved.
 //
 // This file is provided to you under the Apache License,
 // Version 2.0 (the "License"); you may not use this file
@@ -69,6 +69,8 @@
 #define ENM_RCVBUF      19
 #define ENM_NODELAY     20
 #define ENM_IPV4ONLY    21
+#define ENM_RECONNECT_IVL 22
+#define ENM_RECONNECT_IVL_MAX 23
 
 #define IDXSHFT(P,I,SH) ((int)(((unsigned char)((P)[I]))<<(SH)))
 #define GETINT16(P) (IDXSHFT(P,0,8) | IDXSHFT(P,1,0))
@@ -115,6 +117,8 @@ typedef struct {
     int resend_ivl;
     int sndbuf;
     int rcvbuf;
+    int reconnect_ivl;
+    int reconnect_ivl_max;
     struct {
         unsigned topic_seen: 1;
     } b;
