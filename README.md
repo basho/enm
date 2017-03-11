@@ -19,16 +19,16 @@ You can start `enm` as a normal application, using
 `enm` supports all nanomsg scalability protocols and transports. You can
 open a socket providing a particular scalability protocol using functions
 named for each protocol. For example, the `enm:pair/0` function opens a
-pair-type socket for one-to-one commucation, and the `enm:req/0` and
+pair-type socket for one-to-one communication, and the `enm:req/0` and
 `enm:rep/0` functions open the request and reply ends, respectively, of the
 `reqrep` scalability protocol. The arity 0 versions of the `enm`
 scalability protocol functions listed below use default settings for the
-open sockets, while the arity 1 versions allow a list of
-[socket options](#socket-options) to be passed to control socket settings.
+open sockets, while the arity 1 versions allow a list of [socket
+options](#socket-options) to be passed in order to control socket settings.
 
 * `req`: open the request end of the `reqrep` protocol
 * `rep`: open the reply end of the `reqrep` protocol
-* `pair`: open a pair socket for one-to-one commucations
+* `pair`: open a pair socket for one-to-one communications
 * `bus`: open a bus socket for many-to-many communications
 * `pub`: open the publication end of the `pubsub` protocol
 * `sub`: open the subscriber end of the `pubsub` protocol
