@@ -9,6 +9,7 @@ ebin
 c_src/bin/*
 c_src/include/*
 c_src/lib/*
+c_src/lib64/*
 c_src/nanomsg-*/*
 c_src/*.d
 /.eqc-info

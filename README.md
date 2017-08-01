@@ -5,7 +5,7 @@ systems to communicate with other nanomsg endpoints. `enm` supports
 idioms and approaches common to standard Erlang networking facilities such
 as `gen_tcp` and `gen_udp`.
 
-`enm` is currently based on version 0.4-beta of nanomsg, and `enm` itself
+`enm` is currently based on version 1.0.0 of nanomsg, and `enm` itself
 is new, so its features are experimental and subject to change.
 
 ## Starting and Stopping
