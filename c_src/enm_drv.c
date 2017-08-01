@@ -603,7 +603,10 @@ enm_control(ErlDrvData drv_data, unsigned int command,
         break;
 
     case ENM_TERM:
-        nn_term();
+        /* Ideally here we should call nn_term() but it has problems, as
+           discussed at the github nanomsg repository in issues such as
+           #854 (https://github.com/nanomsg/nanomsg/issues/854), so this is
+           a no-op instead. */
         break;
 
     case ENM_GETOPTS:
