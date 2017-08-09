@@ -617,8 +617,11 @@ wait_for_stop() ->
     end.
 
 nn_term() ->
-    Port = erlang:open_port({spawn_driver, ?SHLIB}, [binary]),
-    binary_to_term(port_control(Port, ?ENM_TERM, <<>>)).
+    %% Ideally here we should call nn_term() in the driver but it has
+    %% problems, as discussed at the github nanomsg repository in issues
+    %% such as #854 (https://github.com/nanomsg/nanomsg/issues/854), so
+    %% this is a no-op instead.
+    ok.
 
 transfer_unreceived_msgs(Sock, Type, Owner) ->
     receive
