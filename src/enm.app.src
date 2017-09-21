@@ -1,7 +1,7 @@
 {application, enm,
  [
   {description, "nanomsg Erlang driver"},
-  {vsn, "0.1"},
+  {vsn, "0.2"},
   {registered, [enm]},
   {applications, [
                   kernel,

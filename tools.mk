@@ -24,7 +24,7 @@
 #  wholesale when a new version of tools.mk is released.
 #  -------------------------------------------------------------------
 
-REBAR ?= ./rebar
+REBAR ?= $(shell command -v rebar3 2>/dev/null)
 REVISION ?= $(shell git rev-parse --short HEAD)
 PROJECT ?= $(shell basename `find src -name "*.app.src"` .app.src)
 
@@ -32,10 +32,10 @@ PROJECT ?= $(shell basename `find src -name "*.app.src"` .app.src)
 		cleanplt upload-docs
 
 compile-no-deps:
-	${REBAR} compile skip_deps=true
+	$(REBAR) compile skip_deps=true
 
 test: compile
-	${REBAR} eunit skip_deps=true
+	$(REBAR) eunit skip_deps=true
 
 upload-docs: docs
 	@if [ -z "${BUCKET}" -o -z "${PROJECT}" -o -z "${REVISION}" ]; then \
@@ -45,16 +45,16 @@ upload-docs: docs
 	@echo "Docs built at: http://${BUCKET}.s3-website-us-east-1.amazonaws.com/${PROJECT}/${REVISION}"
 
 docs:
-	${REBAR} doc skip_deps=true
+	$(REBAR) doc skip_deps=true
 
 xref: compile
-	${REBAR} xref skip_deps=true
+	$(REBAR) xref skip_deps=true
 
 PLT ?= $(HOME)/.combo_dialyzer_plt
 LOCAL_PLT = .local_dialyzer_plt
 DIALYZER_FLAGS ?= -Wunmatched_returns
 
-${PLT}: compile
+$(PLT): compile
 	@if [ -f $(PLT) ]; then \
 		dialyzer --check_plt --plt $(PLT) --apps $(DIALYZER_APPS) && \
 		dialyzer --add_to_plt --plt $(PLT) --output_plt $(PLT) --apps $(DIALYZER_APPS) ; test $$? -ne 1; \
@@ -62,7 +62,7 @@ ${PLT}: compile
 		dialyzer --build_plt --output_plt $(PLT) --apps $(DIALYZER_APPS); test $$? -ne 1; \
 	fi
 
-${LOCAL_PLT}: compile
+$(LOCAL_PLT): compile
 	@if [ -d deps ]; then \
 		if [ -f $(LOCAL_PLT) ]; then \
 			dialyzer --check_plt --plt $(LOCAL_PLT) deps/*/ebin  && \
@@ -137,7 +137,7 @@ dialyzer-run:
 
 dialyzer-quick: compile-no-deps dialyzer-run
 
-dialyzer: ${PLT} ${LOCAL_PLT} dialyzer-run
+dialyzer: $(PLT) $(LOCAL_PLT) dialyzer-run
 
 cleanplt:
 	@echo
