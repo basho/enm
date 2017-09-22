@@ -1,6 +1,6 @@
-REBAR = rebar
+REBAR = rebar3
 
-all: compile
+all: $(REBAR) compile
 
 compile:
 	$(REBAR) compile
