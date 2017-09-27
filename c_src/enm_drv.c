@@ -308,7 +308,7 @@ enm_outputv(ErlDrvData drv_data, ErlIOVec *ev)
     /*
      * Do nothing if the message has no data
      */
-    if (ev->vsize == 0 ||
+    if (ev->size == 0 || ev->vsize == 0 ||
         (ev->vsize == 1 && *ev->binv == 0 && ev->iov->iov_len == 0))
         return;
     if (d->b.writable) {
