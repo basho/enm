@@ -531,7 +531,8 @@ validate_opt_names([reconnect_ivl_max|Opts], Bin) ->
 validate_opt_names([Opt|_], _) ->
     error(badarg, [Opt]).
 
--spec validate_opts(nnopenopts() | nnsetopts(), nntypename()) -> binary().
+-spec validate_opts(nnopenopts() | nnsetopts(), nntypename()) ->
+                           binary() | {error, any()}.
 validate_opts(Opts, Type) ->
     validate_opts(Opts, Type, <<>>).
 validate_opts([], _, Bin) ->

@@ -65,10 +65,11 @@ $(PLT): compile
 $(LOCAL_PLT): compile
 	@if [ -d deps ]; then \
 		if [ -f $(LOCAL_PLT) ]; then \
-			dialyzer --check_plt --plt $(LOCAL_PLT) deps/*/ebin  && \
-			dialyzer --add_to_plt --plt $(LOCAL_PLT) --output_plt $(LOCAL_PLT) deps/*/ebin ; test $$? -ne 1; \
+			dialyzer --check_plt --plt $(LOCAL_PLT) _build/default/plugins/*/ebin  && \
+			dialyzer --add_to_plt --plt $(LOCAL_PLT) --output_plt $(LOCAL_PLT) _build/default/plugins/*/ebin ; \
+			test $$? -ne 1; \
 		else \
-			dialyzer --build_plt --output_plt $(LOCAL_PLT) deps/*/ebin ; test $$? -ne 1; \
+			dialyzer --build_plt --output_plt $(LOCAL_PLT) _build/default/plugins/*/ebin ; test $$? -ne 1; \
 		fi \
 	fi
 
@@ -107,7 +108,7 @@ dialyzer-run:
 			echo "ERROR: dialyzer.ignore-warnings contains a blank/empty line, this will match all messages!"; \
 			exit 1; \
 		fi; \
-		dialyzer $(DIALYZER_FLAGS) --plts $${PLTS} -c ebin > dialyzer_warnings ; \
+		dialyzer $(DIALYZER_FLAGS) --plts $${PLTS} -c _build/default/lib/enm/ebin > dialyzer_warnings ; \
 		cat dialyzer.ignore-warnings \
 		| sed -E 's/^([^:]+:)[^:]+:/\1/' \
 		| sort \
@@ -132,7 +133,7 @@ dialyzer-run:
 	    fi; \
 		[ "$$found_warnings" != 1 ] ; \
 	else \
-		dialyzer $(DIALYZER_FLAGS) --plts $${PLTS} -c ebin; \
+		dialyzer $(DIALYZER_FLAGS) --plts $${PLTS} -c _build/default/lib/enm/ebin; \
 	fi
 
 dialyzer-quick: compile-no-deps dialyzer-run
