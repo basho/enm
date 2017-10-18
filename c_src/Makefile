@@ -1,4 +1,4 @@
-NANOMSG := ./nanomsg-1.0.0
+NANOMSG := ./nanomsg-1.1.0
 NANOMSG_LIB := lib/libnanomsg.a
 NANOMSG_TARBALL := $(NANOMSG).tar.gz
 CLEAN := rm -rf $(NANOMSG) bin include lib lib64 share
